@@ -261,14 +261,14 @@ enum DeckstringError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .empty: L10n.t("Deck code is empty.", "Код колоды пуст.")
-        case .invalidBase64: L10n.t("Deck code is not valid base64.", "Код колоды не похож на base64.")
-        case .badReservedByte: L10n.t("Deck code header is invalid.", "Некорректный заголовок кода колоды.")
-        case .unsupportedVersion: L10n.t("Unsupported deck code version.", "Неподдерживаемая версия кода колоды.")
-        case .unknownFormat: L10n.t("Unknown deck format.", "Неизвестный формат колоды.")
-        case .truncated: L10n.t("Deck code is truncated.", "Код колоды обрезан.")
-        case .varintTooLong: L10n.t("Deck code contains an invalid number.", "Код колоды содержит некорректное число.")
-        case .emptyHero: L10n.t("Deck must have a hero.", "В колоде должен быть герой.")
+        case .empty: L10n.tr("Deck code is empty.")
+        case .invalidBase64: L10n.tr("Deck code is not valid base64.")
+        case .badReservedByte: L10n.tr("Deck code header is invalid.")
+        case .unsupportedVersion: L10n.tr("Unsupported deck code version.")
+        case .unknownFormat: L10n.tr("Unknown deck format.")
+        case .truncated: L10n.tr("Deck code is truncated.")
+        case .varintTooLong: L10n.tr("Deck code contains an invalid number.")
+        case .emptyHero: L10n.tr("Deck must have a hero.")
         }
     }
 }

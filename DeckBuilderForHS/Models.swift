@@ -87,10 +87,10 @@ enum GameFormat: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .standard: L10n.t("Standard", "Стандартный")
-        case .wild: L10n.t("Wild", "Вольный")
-        case .classic: L10n.t("Classic", "Классический")
-        case .twist: L10n.t("Twist", "Твист")
+        case .standard: L10n.tr("Standard")
+        case .wild: L10n.tr("Wild")
+        case .classic: L10n.tr("Classic")
+        case .twist: L10n.tr("Twist")
         case .unknown: "-"
         }
     }
@@ -171,9 +171,9 @@ enum CardFormatFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .all: L10n.t("All", "Все")
-        case .standard: L10n.t("Standard", "Стандарт")
-        case .wild: L10n.t("Wild", "Вольный")
+        case .all: L10n.tr("All")
+        case .standard: L10n.tr("Standard")
+        case .wild: L10n.tr("Wild")
         }
     }
 }
@@ -219,9 +219,9 @@ enum ThemeMode: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .system: L10n.t("System default", "Как в системе")
-        case .dark: L10n.t("Always dark", "Всегда темная")
-        case .light: L10n.t("Always light", "Всегда светлая")
+        case .system: L10n.tr("System default")
+        case .dark: L10n.tr("Always dark")
+        case .light: L10n.tr("Always light")
         }
     }
 }
@@ -242,11 +242,11 @@ enum CardLocale: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .enUS: "English"
-        case .ruRU: "Русский"
-        case .deDE: "Deutsch"
-        case .esES: "Español"
-        case .frFR: "Français"
+        case .enUS: L10n.tr("English")
+        case .ruRU: L10n.tr("Russian")
+        case .deDE: L10n.tr("German")
+        case .esES: L10n.tr("Spanish")
+        case .frFR: L10n.tr("French")
         }
     }
 }
@@ -256,25 +256,25 @@ enum ClassLabels {
 
     static func label(_ slug: String?) -> String {
         switch slug?.normalizedClassSlug {
-        case "druid": L10n.t("Druid", "Друид")
-        case "hunter": L10n.t("Hunter", "Охотник")
-        case "mage": L10n.t("Mage", "Маг")
-        case "paladin": L10n.t("Paladin", "Паладин")
-        case "priest": L10n.t("Priest", "Жрец")
-        case "rogue": L10n.t("Rogue", "Разбойник")
-        case "shaman": L10n.t("Shaman", "Шаман")
-        case "warlock": L10n.t("Warlock", "Чернокнижник")
-        case "warrior": L10n.t("Warrior", "Воин")
-        case "demonhunter": L10n.t("Demon Hunter", "Охотник на демонов")
-        case "deathknight": L10n.t("Death Knight", "Рыцарь смерти")
-        default: L10n.t("Neutral", "Нейтрал")
+        case "druid": L10n.tr("Druid")
+        case "hunter": L10n.tr("Hunter")
+        case "mage": L10n.tr("Mage")
+        case "paladin": L10n.tr("Paladin")
+        case "priest": L10n.tr("Priest")
+        case "rogue": L10n.tr("Rogue")
+        case "shaman": L10n.tr("Shaman")
+        case "warlock": L10n.tr("Warlock")
+        case "warrior": L10n.tr("Warrior")
+        case "demonhunter": L10n.tr("Demon Hunter")
+        case "deathknight": L10n.tr("Death Knight")
+        default: L10n.tr("Neutral")
         }
     }
 
     static func short(_ slug: String?) -> String {
         switch slug?.normalizedClassSlug {
-        case "demonhunter": L10n.t("Demon H.", "ОнД")
-        case "deathknight": L10n.t("Death K.", "РС")
+        case "demonhunter": L10n.tr("Demon H.")
+        case "deathknight": L10n.tr("Death K.")
         default: label(slug)
         }
     }
@@ -305,12 +305,32 @@ enum DefaultHeroes {
 }
 
 enum L10n {
-    static var isRussian: Bool {
-        Locale.current.language.languageCode?.identifier == "ru"
+    static func tr(_ key: String) -> String {
+        NSLocalizedString(key, comment: "")
     }
 
-    static func t(_ en: String, _ ru: String) -> String {
-        isRussian ? ru : en
+    static func format(_ key: String, _ arguments: CVarArg...) -> String {
+        String.localizedStringWithFormat(tr(key), arguments)
+    }
+
+    static func cardsCount(_ count: Int) -> String {
+        format("library.count.format", count)
+    }
+
+    static func deckWarningIncomplete(_ current: Int, _ max: Int) -> String {
+        format("deck.warning.incomplete", current, max)
+    }
+
+    static func incompleteSaveMessage(_ current: Int, _ max: Int) -> String {
+        format("builder.incomplete.save.message", current, max)
+    }
+
+    static func wrongClass(_ className: String) -> String {
+        format("builder.wrongClass", className)
+    }
+
+    static func classDeckName(_ className: String) -> String {
+        format("default.classDeckName", className)
     }
 }
 

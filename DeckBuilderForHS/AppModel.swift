@@ -219,9 +219,9 @@ final class AppModel: ObservableObject {
 
     private func defaultDeckName(_ deck: Deck) -> String {
         if let className = deck.heroClass?.name, !className.isEmpty {
-            return "\(className) deck"
+            return L10n.classDeckName(className)
         }
-        return L10n.t("Untitled deck", "Без названия")
+        return L10n.tr("Untitled deck")
     }
 
     private func persistSavedDecks() {

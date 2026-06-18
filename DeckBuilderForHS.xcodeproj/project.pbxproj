@@ -14,6 +14,7 @@
 		01A000000000000000000105 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000005 /* AppModel.swift */; };
 		01A000000000000000000106 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000006 /* Components.swift */; };
 		01A000000000000000000107 /* Screens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000007 /* Screens.swift */; };
+		01A000000000000000000108 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000008 /* Localizable.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +25,8 @@
 		01A000000000000000000005 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		01A000000000000000000006 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		01A000000000000000000007 /* Screens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens.swift; sourceTree = "<group>"; };
+		01A000000000000000000009 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		01A00000000000000000000A /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
 		01A000000000000000000201 /* DeckBuilderForHS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DeckBuilderForHS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -64,6 +67,7 @@
 				01A000000000000000000005 /* AppModel.swift */,
 				01A000000000000000000006 /* Components.swift */,
 				01A000000000000000000007 /* Screens.swift */,
+				01A000000000000000000008 /* Localizable.strings */,
 			);
 			path = DeckBuilderForHS;
 			sourceTree = "<group>";
@@ -76,6 +80,7 @@
 			buildConfigurationList = 01A000000000000000000801 /* Build configuration list for PBXNativeTarget "DeckBuilderForHS" */;
 			buildPhases = (
 				01A000000000000000000701 /* Sources */,
+				01A000000000000000000702 /* Resources */,
 				01A000000000000000000301 /* Frameworks */,
 			);
 			buildRules = (
@@ -108,6 +113,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				ru,
 				Base,
 			);
 			mainGroup = 01A000000000000000000401;
@@ -136,6 +142,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		01A000000000000000000702 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				01A000000000000000000108 /* Localizable.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		01A000000000000000000008 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				01A000000000000000000009 /* en */,
+				01A00000000000000000000A /* ru */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		01A000000000000000000A01 /* Debug */ = {

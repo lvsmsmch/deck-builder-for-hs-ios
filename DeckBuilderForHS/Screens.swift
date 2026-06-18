@@ -7,11 +7,11 @@ struct RootView: View {
     var body: some View {
         TabView {
             NavigationStack { CardLibraryView() }
-                .tabItem { Label(L10n.t("Library", "Карты"), systemImage: "square.grid.2x2") }
+                .tabItem { Label(L10n.tr("Library"), systemImage: "square.grid.2x2") }
             NavigationStack { SavedDecksView() }
-                .tabItem { Label(L10n.t("Saved", "Колоды"), systemImage: "bookmark") }
+                .tabItem { Label(L10n.tr("Saved"), systemImage: "bookmark") }
             NavigationStack { MoreView() }
-                .tabItem { Label(L10n.t("More", "Еще"), systemImage: "ellipsis") }
+                .tabItem { Label(L10n.tr("More"), systemImage: "ellipsis") }
         }
         .appBackground()
     }
@@ -33,7 +33,7 @@ struct CardLibraryView: View {
     var body: some View {
         VStack(spacing: 0) {
             libraryHeader
-            SearchField(text: $filters.textQuery, placeholder: L10n.t("Search cards by name or text...", "Поиск по имени или тексту..."))
+            SearchField(text: $filters.textQuery, placeholder: L10n.tr("Search cards by name or text..."))
                 .padding(.bottom, 4)
             ManaChips(selected: filters.manaCosts) { toggle($0, in: &filters.manaCosts) }
             ClassChips(selected: filters.classes) { toggle($0.normalizedClassSlug, in: &filters.classes) }
@@ -61,12 +61,12 @@ struct CardLibraryView: View {
                     .padding(.bottom, 16)
                 }
                 if isLoading && visibleCards.isEmpty {
-                    ProgressView(L10n.t("Loading cards...", "Загружаем карты..."))
+                    ProgressView(L10n.tr("Loading cards..."))
                         .tint(AppColor.primary)
                 } else if visibleCards.isEmpty && !isLoading {
                     EmptyStateView(
-                        title: filters.hasFilters ? L10n.t("No cards match these filters.", "Под эти фильтры ничего не найдено.") : L10n.t("No cards loaded yet.", "Карты еще не загружены."),
-                        bodyText: app.cardLoadError ?? L10n.t("Try changing search or filters.", "Попробуй изменить поиск или фильтры."),
+                        title: filters.hasFilters ? L10n.tr("No cards match these filters.") : L10n.tr("No cards loaded yet."),
+                        bodyText: app.cardLoadError ?? L10n.tr("Try changing search or filters."),
                         icon: "square.grid.2x2"
                     )
                 }
@@ -87,19 +87,19 @@ struct CardLibraryView: View {
     private var libraryHeader: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("Library", "Карты"))
+                Text(L10n.tr("Library"))
                     .font(.title2.weight(.bold))
-                Text(L10n.t("\(totalCount) cards", "карт: \(totalCount)"))
+                Text(L10n.cardsCount(totalCount))
                     .font(.caption)
                     .foregroundStyle(AppColor.onSurfaceDim)
             }
             Spacer()
             Menu {
-                Button(L10n.t("Mana asc", "Мана вверх")) { filters.sort = CardSort(key: .manaCost, direction: .ascending) }
-                Button(L10n.t("Mana desc", "Мана вниз")) { filters.sort = CardSort(key: .manaCost, direction: .descending) }
-                Button(L10n.t("Name", "Имя")) { filters.sort = CardSort(key: .name, direction: .ascending) }
-                Button(L10n.t("Newest", "Сначала новые")) { filters.sort = CardSort(key: .dateAdded, direction: .ascending) }
-                Button(L10n.t("By class", "По классу")) { filters.sort = CardSort(key: .groupByClass, direction: .ascending) }
+                Button(L10n.tr("Mana asc")) { filters.sort = CardSort(key: .manaCost, direction: .ascending) }
+                Button(L10n.tr("Mana desc")) { filters.sort = CardSort(key: .manaCost, direction: .descending) }
+                Button(L10n.tr("Name")) { filters.sort = CardSort(key: .name, direction: .ascending) }
+                Button(L10n.tr("Newest")) { filters.sort = CardSort(key: .dateAdded, direction: .ascending) }
+                Button(L10n.tr("By class")) { filters.sort = CardSort(key: .groupByClass, direction: .ascending) }
             } label: {
                 Image(systemName: "arrow.up.arrow.down")
                     .frame(width: 40, height: 40)
@@ -167,7 +167,7 @@ struct FilterSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(L10n.t("Format", "Формат")) {
+                Section(L10n.tr("Format")) {
                     Picker("", selection: $filters.format) {
                         ForEach(CardFormatFilter.allCases) { format in
                             Text(format.label).tag(format)
@@ -175,13 +175,13 @@ struct FilterSheet: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                Section(L10n.t("Rarity", "Редкость")) {
+                Section(L10n.tr("Rarity")) {
                     multiRow("Common", "common", selection: $filters.rarities)
                     multiRow("Rare", "rare", selection: $filters.rarities)
                     multiRow("Epic", "epic", selection: $filters.rarities)
                     multiRow("Legendary", "legendary", selection: $filters.rarities)
                 }
-                Section(L10n.t("Type", "Тип")) {
+                Section(L10n.tr("Type")) {
                     multiRow("Minion", "minion", selection: $filters.types)
                     multiRow("Spell", "spell", selection: $filters.types)
                     multiRow("Weapon", "weapon", selection: $filters.types)
@@ -189,18 +189,18 @@ struct FilterSheet: View {
                     multiRow("Location", "location", selection: $filters.types)
                 }
                 Section {
-                    Toggle(L10n.t("Collectible only", "Только доступные"), isOn: $filters.collectibleOnly)
+                    Toggle(L10n.tr("Collectible only"), isOn: $filters.collectibleOnly)
                 }
             }
             .scrollContentBackground(.hidden)
             .background(AppColor.surface)
-            .navigationTitle(L10n.t("Filters", "Фильтры"))
+            .navigationTitle(L10n.tr("Filters"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.t("Reset all", "Сбросить")) { filters = CardFilters(textQuery: filters.textQuery) }
+                    Button(L10n.tr("Reset all")) { filters = CardFilters(textQuery: filters.textQuery) }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.t("Apply", "Применить")) { dismiss() }
+                    Button(L10n.tr("Apply")) { dismiss() }
                 }
             }
         }
@@ -215,7 +215,7 @@ struct FilterSheet: View {
             }
         } label: {
             HStack {
-                Text(label)
+                Text(L10n.tr(label))
                 Spacer()
                 if selection.wrappedValue.contains(value) {
                     Image(systemName: "checkmark")
@@ -274,7 +274,7 @@ struct CardDetailView: View {
             }
         }
         .navigationTitle("")
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.t("Close", "Закрыть")) { dismiss() } } }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("Close")) { dismiss() } } }
         .appBackground()
     }
 
@@ -300,7 +300,7 @@ struct CardDetailView: View {
         VStack(spacing: 3) {
             Text("\(value)")
                 .font(.headline.weight(.bold))
-            Text(label)
+            Text(L10n.tr(label))
                 .font(.caption)
                 .foregroundStyle(AppColor.onSurfaceDim)
         }
@@ -321,7 +321,7 @@ struct CardImagePanel: View {
                 case .success(let image):
                     image.resizable().scaledToFit()
                 case .failure:
-                    Text(L10n.t("Image failed to load", "Изображение не загрузилось"))
+                    Text(L10n.tr("Image failed to load"))
                         .foregroundStyle(AppColor.onSurfaceDim)
                 default:
                     ProgressView().tint(AppColor.primary)
@@ -354,7 +354,7 @@ struct SavedDecksView: View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 0) {
                 HStack {
-                    Text(L10n.t("Saved decks", "Сохраненные колоды"))
+                    Text(L10n.tr("Saved decks"))
                         .font(.title2.weight(.bold))
                     Spacer()
                 }
@@ -364,8 +364,8 @@ struct SavedDecksView: View {
 
                 if app.savedDecks.isEmpty {
                     EmptyStateView(
-                        title: L10n.t("No saved decks yet.", "Колоды еще не сохранены."),
-                        bodyText: L10n.t("Tap the + button to start a new deck or paste a deck code.", "Жми +, чтобы создать новую колоду или вставить код."),
+                        title: L10n.tr("No saved decks yet."),
+                        bodyText: L10n.tr("Tap the + button to start a new deck or paste a deck code."),
                         icon: "bookmark"
                     )
                 } else {
@@ -402,10 +402,10 @@ struct SavedDecksView: View {
             .padding(20)
         }
         .appBackground()
-        .confirmationDialog(L10n.t("New deck", "Новая колода"), isPresented: $showNewDeck) {
-            Button(L10n.t("Create from scratch", "Создать с нуля")) { showBuilder = true }
-            Button(L10n.t("Paste deck code", "Вставить код")) { showImport = true }
-            Button(L10n.t("Cancel", "Отмена"), role: .cancel) {}
+        .confirmationDialog(L10n.tr("New deck"), isPresented: $showNewDeck) {
+            Button(L10n.tr("Create from scratch")) { showBuilder = true }
+            Button(L10n.tr("Paste deck code")) { showImport = true }
+            Button(L10n.tr("Cancel"), role: .cancel) {}
         }
         .sheet(isPresented: $showImport) { importSheet }
         .sheet(item: $selectedDeck) { deck in NavigationStack { DeckView(deck: deck) } }
@@ -415,20 +415,20 @@ struct SavedDecksView: View {
                 selectedDeck = deck
             }
         }
-        .alert(L10n.t("Rename deck", "Переименовать колоду"), isPresented: Binding(get: { renameDeck != nil }, set: { if !$0 { renameDeck = nil } })) {
-            TextField(L10n.t("Deck name", "Имя колоды"), text: $renameText)
-            Button(L10n.t("Save", "Сохранить")) {
+        .alert(L10n.tr("Rename deck"), isPresented: Binding(get: { renameDeck != nil }, set: { if !$0 { renameDeck = nil } })) {
+            TextField(L10n.tr("Deck name"), text: $renameText)
+            Button(L10n.tr("Save")) {
                 if let deck = renameDeck { app.renameDeck(code: deck.code, name: renameText) }
                 renameDeck = nil
             }
-            Button(L10n.t("Cancel", "Отмена"), role: .cancel) { renameDeck = nil }
+            Button(L10n.tr("Cancel"), role: .cancel) { renameDeck = nil }
         }
     }
 
     private var importSheet: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
-                Text(L10n.t("Paste a Hearthstone deck code. Tap Decode to view and save it.", "Вставь код колоды Hearthstone. Нажми Декодировать, чтобы увидеть и сохранить."))
+                Text(L10n.tr("Paste a Hearthstone deck code. Tap Decode to view and save it."))
                     .font(.subheadline)
                     .foregroundStyle(AppColor.onSurfaceDim)
                 TextEditor(text: $importCode)
@@ -452,14 +452,14 @@ struct SavedDecksView: View {
                         }
                     }
                 } label: {
-                    Text(L10n.t("Decode", "Декодировать"))
+                    Text(L10n.tr("Decode"))
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 Spacer()
             }
             .padding(20)
-            .navigationTitle(L10n.t("Import deck", "Импорт колоды"))
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.t("Close", "Закрыть")) { showImport = false } } }
+            .navigationTitle(L10n.tr("Import deck"))
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("Close")) { showImport = false } } }
             .appBackground()
         }
     }
@@ -496,9 +496,9 @@ struct SavedDeckRow: View {
                     }
                     Spacer()
                     Menu {
-                        Button(L10n.t("Copy code", "Копировать код"), systemImage: "doc.on.doc", action: onCopy)
-                        Button(L10n.t("Rename", "Переименовать"), systemImage: "pencil", action: onRename)
-                        Button(L10n.t("Delete", "Удалить"), systemImage: "trash", role: .destructive, action: onDelete)
+                        Button(L10n.tr("Copy code"), systemImage: "doc.on.doc", action: onCopy)
+                        Button(L10n.tr("Rename"), systemImage: "pencil", action: onRename)
+                        Button(L10n.tr("Delete"), systemImage: "trash", role: .destructive, action: onDelete)
                     } label: {
                         Image(systemName: "ellipsis")
                             .foregroundStyle(AppColor.onSurfaceDim)
@@ -506,7 +506,7 @@ struct SavedDeckRow: View {
                     }
                 }
                 if deck.cardCount < deck.maxCardCount {
-                    Text(L10n.t("Deck has only \(deck.cardCount)/\(deck.maxCardCount) cards.", "В колоде только \(deck.cardCount)/\(deck.maxCardCount) карт."))
+                    Text(L10n.deckWarningIncomplete(deck.cardCount, deck.maxCardCount))
                         .font(.caption)
                         .foregroundStyle(Color(hex: 0xE0A23F))
                         .padding(.leading, 39)
@@ -558,17 +558,17 @@ struct DeckView: View {
                 Button {
                     Clipboard.copy(deck.code)
                 } label: {
-                    Label(L10n.t("Copy", "Копировать"), systemImage: "doc.on.doc")
+                    Label(L10n.tr("Copy"), systemImage: "doc.on.doc")
                 }
                 .buttonStyle(.bordered)
                 ShareLink(item: deck.code) {
-                    Label(L10n.t("Share", "Поделиться"), systemImage: "square.and.arrow.up")
+                    Label(L10n.tr("Share"), systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.bordered)
                 Button {
                     app.save(deck: deck)
                 } label: {
-                    Text(L10n.t("Save", "Сохранить"))
+                    Text(L10n.tr("Save"))
                 }
                 .buttonStyle(PrimaryButtonStyle())
             }
@@ -576,7 +576,7 @@ struct DeckView: View {
             .background(AppColor.surfaceContainer)
         }
         .navigationTitle("")
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.t("Close", "Закрыть")) { dismiss() } } }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("Close")) { dismiss() } } }
         .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
         .appBackground()
     }
@@ -616,21 +616,21 @@ struct DeckBuilderView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(phaseClassPicker ? L10n.t("Close", "Закрыть") : L10n.t("Back", "Назад")) {
+                    Button(phaseClassPicker ? L10n.tr("Close") : L10n.tr("Back")) {
                         if phaseClassPicker { dismiss() } else { phaseClassPicker = true }
                     }
                 }
             }
-            .alert(L10n.t("Deck builder", "Создание колоды"), isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
-                Button("OK", role: .cancel) { alertMessage = nil }
+            .alert(L10n.tr("Deck builder"), isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
+                Button(L10n.tr("OK"), role: .cancel) { alertMessage = nil }
             } message: {
                 Text(alertMessage ?? "")
             }
-            .confirmationDialog(L10n.t("Save incomplete deck?", "Сохранить неполную колоду?"), isPresented: $confirmIncompleteSave) {
-                Button(L10n.t("Save anyway", "Сохранить")) { saveDeck() }
-                Button(L10n.t("Cancel", "Отмена"), role: .cancel) {}
+            .confirmationDialog(L10n.tr("Save incomplete deck?"), isPresented: $confirmIncompleteSave) {
+                Button(L10n.tr("Save anyway")) { saveDeck() }
+                Button(L10n.tr("Cancel"), role: .cancel) {}
             } message: {
-                Text(L10n.t("This deck has only \(cardCount)/\(maxDeckSize) cards. Save it anyway?", "В колоде только \(cardCount)/\(maxDeckSize) карт. Все равно сохранить?"))
+                Text(L10n.incompleteSaveMessage(cardCount, maxDeckSize))
             }
             .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
             .appBackground()
@@ -639,10 +639,10 @@ struct DeckBuilderView: View {
 
     private var classPicker: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(L10n.t("New deck", "Новая колода"))
+            Text(L10n.tr("New deck"))
                 .font(.title2.weight(.bold))
                 .padding(.horizontal, 20)
-            Text(L10n.t("Pick a class to begin.", "Выбери класс, чтобы начать."))
+            Text(L10n.tr("Pick a class to begin."))
                 .font(.subheadline)
                 .foregroundStyle(AppColor.onSurfaceDim)
                 .padding(.horizontal, 20)
@@ -678,8 +678,8 @@ struct DeckBuilderView: View {
         VStack(spacing: 0) {
             builderHeader
             Picker("", selection: $activeTab) {
-                Text(L10n.t("Deck", "Колода")).tag(0)
-                Text(L10n.t("Pool", "Пул")).tag(1)
+                Text(L10n.tr("Deck")).tag(0)
+                Text(L10n.tr("Pool")).tag(1)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
@@ -722,15 +722,15 @@ struct DeckBuilderView: View {
         Group {
             if deckEntries.isEmpty {
                 EmptyStateView(
-                    title: L10n.t("Empty deck.", "Колода пуста."),
-                    bodyText: L10n.t("Switch to the Pool tab and tap cards to add them.", "Перейди во вкладку Пул и тапай по картам, чтобы добавить."),
+                    title: L10n.tr("Empty deck."),
+                    bodyText: L10n.tr("Switch to the Pool tab and tap cards to add them."),
                     icon: "rectangle.stack.badge.plus"
                 )
             } else {
                 List {
                     ForEach(deckEntries) { entry in
                         DeckCardRow(entry: entry) { remove(entry.card) }
-                            .swipeActions { Button(L10n.t("Remove", "Убрать"), role: .destructive) { remove(entry.card) } }
+                            .swipeActions { Button(L10n.tr("Remove"), role: .destructive) { remove(entry.card) } }
                             .listRowBackground(AppColor.surface)
                     }
                 }
@@ -742,7 +742,7 @@ struct DeckBuilderView: View {
 
     private var poolPane: some View {
         VStack(spacing: 0) {
-            SearchField(text: $poolFilters.textQuery, placeholder: L10n.t("Search pool", "Поиск в пуле"))
+            SearchField(text: $poolFilters.textQuery, placeholder: L10n.tr("Search pool"))
             ManaChips(selected: poolFilters.manaCosts) { cost in
                 if poolFilters.manaCosts.contains(cost) { poolFilters.manaCosts.remove(cost) } else { poolFilters.manaCosts.insert(cost) }
                 Task { await reloadPool() }
@@ -752,7 +752,7 @@ struct DeckBuilderView: View {
                     ForEach(poolCards) { card in
                         CardThumbnail(card: card) { add(card) }
                             .contextMenu {
-                                Button(L10n.t("Details", "Детали")) { selectedCard = card }
+                                Button(L10n.tr("Details")) { selectedCard = card }
                             }
                     }
                 }
@@ -773,7 +773,7 @@ struct DeckBuilderView: View {
             Button {
                 if cardCount < maxDeckSize { confirmIncompleteSave = true } else { saveDeck() }
             } label: {
-                Text(L10n.t("Save", "Сохранить"))
+                Text(L10n.tr("Save"))
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(cardCount == 0)
@@ -805,17 +805,17 @@ struct DeckBuilderView: View {
         guard let chosenClass else { return }
         let cardClasses = Set(card.classes.map(\.slug))
         guard cardClasses.contains(chosenClass) || cardClasses.contains("neutral") || cardClasses.isEmpty else {
-            alertMessage = L10n.t("Not a \(ClassLabels.label(chosenClass)) or Neutral card", "Это карта другого класса")
+            alertMessage = L10n.wrongClass(ClassLabels.label(chosenClass))
             return
         }
         let current = deck[card.id]?.count ?? 0
         let cap = singleton || card.isLegendary ? 1 : 2
         guard current < cap else {
-            alertMessage = card.isLegendary ? L10n.t("Legendary limit (x1)", "Лимит легендарок (x1)") : L10n.t("Card limit (x2)", "Лимит карт (x2)")
+            alertMessage = card.isLegendary ? L10n.tr("Legendary limit (x1)") : L10n.tr("Card limit (x2)")
             return
         }
         guard cardCount < max(card.isPrinceRenathal ? 40 : maxDeckSize, maxDeckSize) else {
-            alertMessage = L10n.t("Deck is full", "Колода заполнена")
+            alertMessage = L10n.tr("Deck is full")
             return
         }
         deck[card.id] = DeckCardEntry(card: card, count: current + 1)
@@ -852,8 +852,8 @@ struct MoreView: View {
                 } label: {
                     Label {
                         VStack(alignment: .leading) {
-                            Text(L10n.t("Settings", "Настройки"))
-                            Text(L10n.t("Theme, language, privacy", "Тема, язык, приватность"))
+                            Text(L10n.tr("Settings"))
+                            Text(L10n.tr("Theme, language, privacy"))
                                 .font(.caption)
                                 .foregroundStyle(AppColor.onSurfaceDim)
                         }
@@ -866,8 +866,8 @@ struct MoreView: View {
                 } label: {
                     Label {
                         VStack(alignment: .leading) {
-                            Text(L10n.t("Card data", "Данные карт"))
-                            Text(L10n.t("Build, last update check", "Билд, последняя проверка"))
+                            Text(L10n.tr("Card data"))
+                            Text(L10n.tr("Build, last update check"))
                                 .font(.caption)
                                 .foregroundStyle(AppColor.onSurfaceDim)
                         }
@@ -878,7 +878,7 @@ struct MoreView: View {
             }
             .listRowBackground(AppColor.surfaceContainer)
         }
-        .navigationTitle(L10n.t("More", "Еще"))
+        .navigationTitle(L10n.tr("More"))
         .scrollContentBackground(.hidden)
         .appBackground()
     }
@@ -889,32 +889,32 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section(L10n.t("Appearance", "Внешний вид")) {
-                Picker(L10n.t("Theme", "Тема"), selection: Binding(get: { app.preferences.theme }, set: app.setTheme)) {
+            Section(L10n.tr("Appearance")) {
+                Picker(L10n.tr("Theme"), selection: Binding(get: { app.preferences.theme }, set: app.setTheme)) {
                     ForEach(ThemeMode.allCases) { theme in Text(theme.label).tag(theme) }
                 }
             }
-            Section(L10n.t("Language", "Язык")) {
-                Picker(L10n.t("Card language", "Язык карт"), selection: Binding(get: { app.preferences.cardLocale }, set: app.setCardLocale)) {
+            Section(L10n.tr("Language")) {
+                Picker(L10n.tr("Card language"), selection: Binding(get: { app.preferences.cardLocale }, set: app.setCardLocale)) {
                     ForEach(CardLocale.allCases) { locale in Text(locale.label).tag(locale.rawValue) }
                 }
             }
-            Section(L10n.t("Privacy", "Конфиденциальность")) {
-                Toggle(L10n.t("Send error reports", "Отправлять отчеты об ошибках"), isOn: Binding(get: { app.preferences.crashReportingEnabled }, set: app.setCrashReporting))
+            Section(L10n.tr("Privacy")) {
+                Toggle(L10n.tr("Send error reports"), isOn: Binding(get: { app.preferences.crashReportingEnabled }, set: app.setCrashReporting))
             }
-            Section(L10n.t("Storage", "Хранилище")) {
+            Section(L10n.tr("Storage")) {
                 Button(role: .destructive) {
                     app.clearImageCache()
                 } label: {
-                    Label(L10n.t("Clear image cache", "Очистить кеш изображений"), systemImage: "trash")
+                    Label(L10n.tr("Clear image cache"), systemImage: "trash")
                 }
             }
-            Section(L10n.t("About", "О приложении")) {
-                LabeledContent(L10n.t("Version", "Версия"), value: "1.0")
+            Section(L10n.tr("About")) {
+                LabeledContent(L10n.tr("Version"), value: "1.0")
                 Link("iamajavagod@gmail.com", destination: URL(string: "mailto:iamajavagod@gmail.com")!)
             }
         }
-        .navigationTitle(L10n.t("Settings", "Настройки"))
+        .navigationTitle(L10n.tr("Settings"))
         .scrollContentBackground(.hidden)
         .appBackground()
     }
@@ -925,9 +925,9 @@ struct CardDataView: View {
 
     var body: some View {
         List {
-            Section(L10n.t("Card data", "Данные карт")) {
-                LabeledContent(L10n.t("Cards loaded", "Карт загружено"), value: "\(app.cards.count)")
-                LabeledContent(L10n.t("Locale", "Локаль"), value: app.preferences.cardLocale)
+            Section(L10n.tr("Card data")) {
+                LabeledContent(L10n.tr("Cards loaded"), value: "\(app.cards.count)")
+                LabeledContent(L10n.tr("Locale"), value: app.preferences.cardLocale)
                 if let error = app.cardLoadError {
                     Text(error).foregroundStyle(AppColor.error)
                 }
@@ -937,12 +937,12 @@ struct CardDataView: View {
                     if app.isLoadingCards {
                         ProgressView()
                     } else {
-                        Label(L10n.t("Refresh card data", "Обновить данные карт"), systemImage: "arrow.clockwise")
+                        Label(L10n.tr("Refresh card data"), systemImage: "arrow.clockwise")
                     }
                 }
             }
         }
-        .navigationTitle(L10n.t("Card data", "Данные карт"))
+        .navigationTitle(L10n.tr("Card data"))
         .scrollContentBackground(.hidden)
         .appBackground()
     }
