@@ -38,6 +38,7 @@
 "Details" = "Details";
 "Druid" = "Druid";
 "Empty deck." = "Empty deck.";
+"Error" = "Error";
 "English" = "English";
 "Filters" = "Filters";
 "Format" = "Format";
@@ -111,6 +112,9 @@
 "deck.warning.incomplete" = "Deck has only %d/%d cards.";
 "default.classDeckName" = "%@ deck";
 "library.count.format" = "%d cards";
+"Rotation data failed to load." = "Rotation data failed to load.";
+"Rotation data is invalid." = "Rotation data is invalid.";
+"Standard rotation sets were not found." = "Standard rotation sets were not found.";
 "Armor" = "Armor";
 "Attack" = "Attack";
 "Common" = "Common";

@@ -70,6 +70,170 @@ actor HsJsonService {
     }
 }
 
+actor RotationService {
+    private let sourceURL = URL(string: "https://raw.githubusercontent.com/HearthSim/python-hearthstone/master/hearthstone/utils/__init__.py")!
+    private let session: URLSession
+    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
+
+    init(session: URLSession = .shared) {
+        self.session = session
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        decoder.dateDecodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .iso8601
+    }
+
+    func standardSets(forceRefresh: Bool = false) async throws -> Set<String> {
+        if !forceRefresh, let cached = try? loadCached(), !cached.standardSets.isEmpty {
+            return Set(cached.standardSets)
+        }
+
+        let (data, response) = try await session.data(from: sourceURL)
+        guard (response as? HTTPURLResponse).map({ 200..<300 ~= $0.statusCode }) == true else {
+            throw RotationError.requestFailed
+        }
+        guard let source = String(data: data, encoding: .utf8) else {
+            throw RotationError.invalidSource
+        }
+        let parsed = try parseStandardSets(source)
+        try cache(StandardRotationCache(standardSets: Array(parsed).sorted(), fetchedAt: Date()))
+        return parsed
+    }
+
+    private func parseStandardSets(_ source: String, now: Date = Date()) throws -> Set<String> {
+        let standardByYear = try parseStandardSetsByYear(source)
+        let year = parseCurrentZodiacYear(source, now: now) ?? standardByYear.keys.sorted().last
+        guard let year, let sets = standardByYear[year], !sets.isEmpty else {
+            throw RotationError.standardSetsMissing
+        }
+        return sets
+    }
+
+    private func parseStandardSetsByYear(_ source: String) throws -> [String: Set<String>] {
+        let body = try dictionaryBody(named: "STANDARD_SETS", in: source)
+        let regex = try NSRegularExpression(
+            pattern: #"ZodiacYear\.([A-Z_]+)\s*:\s*\[([\s\S]*?)\]"#,
+            options: []
+        )
+        let matches = regex.matches(in: body, range: NSRange(body.startIndex..<body.endIndex, in: body))
+        var result: [String: Set<String>] = [:]
+
+        for match in matches {
+            guard let yearRange = Range(match.range(at: 1), in: body),
+                  let setsRange = Range(match.range(at: 2), in: body) else { continue }
+            let year = String(body[yearRange])
+            let setTokens = try parseCardSetTokens(String(body[setsRange]))
+            if !setTokens.isEmpty {
+                result[year] = setTokens
+            }
+        }
+
+        guard !result.isEmpty else { throw RotationError.standardSetsMissing }
+        return result
+    }
+
+    private func parseCurrentZodiacYear(_ source: String, now: Date) -> String? {
+        guard let body = try? dictionaryBody(named: "ZODIAC_ROTATION_DATES", in: source),
+              let regex = try? NSRegularExpression(
+                pattern: #"ZodiacYear\.([A-Z_]+)\s*:\s*(?:_EPOCH|datetime\((\d+),\s*(\d+),\s*(\d+)\))"#,
+                options: []
+              ) else {
+            return nil
+        }
+        let matches = regex.matches(in: body, range: NSRange(body.startIndex..<body.endIndex, in: body))
+        var current: (year: String, date: Date)?
+        for match in matches {
+            guard let yearRange = Range(match.range(at: 1), in: body) else { continue }
+            let year = String(body[yearRange])
+            let date: Date
+            if match.range(at: 2).location == NSNotFound {
+                date = Date(timeIntervalSince1970: 0)
+            } else if let yRange = Range(match.range(at: 2), in: body),
+                      let mRange = Range(match.range(at: 3), in: body),
+                      let dRange = Range(match.range(at: 4), in: body),
+                      let y = Int(body[yRange]),
+                      let m = Int(body[mRange]),
+                      let d = Int(body[dRange]) {
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+                date = calendar.date(from: DateComponents(year: y, month: m, day: d)) ?? .distantPast
+            } else {
+                continue
+            }
+            if date <= now, current == nil || date > current!.date {
+                current = (year, date)
+            }
+        }
+        return current?.year
+    }
+
+    private func parseCardSetTokens(_ body: String) throws -> Set<String> {
+        let regex = try NSRegularExpression(pattern: #"CardSet\.([A-Z0-9_]+)"#)
+        let matches = regex.matches(in: body, range: NSRange(body.startIndex..<body.endIndex, in: body))
+        return Set(matches.compactMap { match in
+            guard let range = Range(match.range(at: 1), in: body) else { return nil }
+            return String(body[range])
+        })
+    }
+
+    private func dictionaryBody(named name: String, in source: String) throws -> String {
+        guard let startRange = source.range(of: "\(name) = {") else {
+            throw RotationError.standardSetsMissing
+        }
+        var depth = 1
+        let bodyStart = startRange.upperBound
+        var index = startRange.upperBound
+        while index < source.endIndex {
+            let char = source[index]
+            if char == "{" {
+                depth += 1
+            } else if char == "}" {
+                depth -= 1
+                if depth == 0 {
+                    return String(source[bodyStart..<index])
+                }
+            }
+            index = source.index(after: index)
+        }
+        throw RotationError.standardSetsMissing
+    }
+
+    private func loadCached() throws -> StandardRotationCache {
+        let data = try Data(contentsOf: cacheURL)
+        return try decoder.decode(StandardRotationCache.self, from: data)
+    }
+
+    private func cache(_ rotation: StandardRotationCache) throws {
+        try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try encoder.encode(rotation).write(to: cacheURL, options: [.atomic])
+    }
+
+    private var cacheURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Rotation", isDirectory: true)
+            .appendingPathComponent("standard-sets.json")
+    }
+}
+
+private struct StandardRotationCache: Codable {
+    let standardSets: [String]
+    let fetchedAt: Date
+}
+
+enum RotationError: LocalizedError {
+    case requestFailed
+    case invalidSource
+    case standardSetsMissing
+
+    var errorDescription: String? {
+        switch self {
+        case .requestFailed: L10n.tr("Rotation data failed to load.")
+        case .invalidSource: L10n.tr("Rotation data is invalid.")
+        case .standardSetsMissing: L10n.tr("Standard rotation sets were not found.")
+        }
+    }
+}
+
 extension HsJsonCardDTO {
     func toDomain(locale: String) -> Card? {
         guard let name, !name.isEmpty else { return nil }

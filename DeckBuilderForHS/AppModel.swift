@@ -7,9 +7,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var cards: [Card] = []
     @Published private(set) var isLoadingCards = false
     @Published private(set) var cardLoadError: String?
+    @Published private(set) var rotationLoadError: String?
     @Published var savedDecks: [DeckPreview] = []
 
     private let hsJson = HsJsonService()
+    private let rotation = RotationService()
     private let preferencesStore = PreferencesStore()
     private let savedDeckStore = SavedDeckStore()
     private var cardIndexById: [Int: Card] = [:]
@@ -67,7 +69,8 @@ final class AppModel: ObservableObject {
 
     func searchCards(filters: CardFilters, page: Int = 1, pageSize: Int = 60) async -> Page<Card> {
         await loadCardsIfNeeded()
-        let matched = filteredCards(filters: filters)
+        let standardSetTokens = await standardSetsIfNeeded(for: filters)
+        let matched = filteredCards(filters: filters, standardSetTokens: standardSetTokens)
         let total = matched.count
         let pageCount = max(1, Int(ceil(Double(total) / Double(pageSize))))
         let safePage = max(1, min(page, pageCount))
@@ -89,7 +92,7 @@ final class AppModel: ObservableObject {
         return buildDeck(code: code, payload: payload)
     }
 
-    func save(deck: Deck, name: String? = nil) {
+    func save(deck: Deck, name: String? = nil) throws {
         let existing = savedDecks.first { $0.code == deck.code }
         let cardIds = deck.cards.flatMap { entry in Array(repeating: entry.card.id, count: entry.count) }
         let preview = DeckPreview(
@@ -105,21 +108,24 @@ final class AppModel: ObservableObject {
             savedAt: Date(),
             cardIds: cardIds
         )
-        savedDecks.removeAll { $0.code == deck.code }
-        savedDecks.insert(preview, at: 0)
-        persistSavedDecks()
+        var next = savedDecks
+        next.removeAll { $0.code == deck.code }
+        next.insert(preview, at: 0)
+        try persistSavedDecks(next)
     }
 
-    func deleteDeck(code: String) {
-        savedDecks.removeAll { $0.code == code }
-        persistSavedDecks()
+    func deleteDeck(code: String) throws {
+        var next = savedDecks
+        next.removeAll { $0.code == code }
+        try persistSavedDecks(next)
     }
 
-    func renameDeck(code: String, name: String) {
+    func renameDeck(code: String, name: String) throws {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let index = savedDecks.firstIndex(where: { $0.code == code }) else { return }
-        savedDecks[index].name = trimmed
-        persistSavedDecks()
+        var next = savedDecks
+        next[index].name = trimmed
+        try persistSavedDecks(next)
     }
 
     func clearImageCache() {
@@ -147,7 +153,7 @@ final class AppModel: ObservableObject {
         return Deck(code: code, format: payload.format.gameFormat, hero: hero, heroClass: heroClass, cards: entries, invalidCardIds: invalid)
     }
 
-    private func filteredCards(filters: CardFilters) -> [Card] {
+    private func filteredCards(filters: CardFilters, standardSetTokens: Set<String>) -> [Card] {
         let q = filters.textQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let expandedMana = Set(filters.manaCosts.flatMap { $0 >= 7 ? Array(7...30) : [$0] })
         let rows = cards.filter { card in
@@ -167,17 +173,30 @@ final class AppModel: ObservableObject {
                 let haystack = (card.name + " " + (card.text ?? "")).lowercased()
                 if !haystack.contains(q) { return false }
             }
-            if filters.format == .standard {
-                let wildOnly = ["legacy", "vanilla", "expert1", "hall-of-fame", "naxx", "gvg", "brm", "tgt", "loe", "og", "kara", "gangs", "ungoro", "icecrown", "lootapalooza", "gilneas", "boomsday", "troll", "dalaraan", "uldum", "dragons"]
-                if let set = card.cardSet?.slug, wildOnly.contains(set) { return false }
-            }
-            if filters.format == .wild {
-                let standardish = ["core", "the-lost-city", "space", "island-vacation", "whizbangs-workshop", "wild-west", "titans", "festival-of-legends", "battle-of-the-bands"]
-                if let set = card.cardSet?.slug, standardish.contains(set) { return false }
+            if filters.format != .all {
+                guard let set = card.cardSet?.slug.rotationToken, !standardSetTokens.isEmpty else { return false }
+                let isStandard = standardSetTokens.contains(set)
+                if filters.format == .standard && !isStandard { return false }
+                if filters.format == .wild && isStandard { return false }
             }
             return true
         }
         return dedupeReprints(sort(rows, by: filters.sort))
+    }
+
+    private func standardSetsIfNeeded(for filters: CardFilters) async -> Set<String> {
+        guard filters.format != .all else {
+            rotationLoadError = nil
+            return []
+        }
+        do {
+            let sets = try await rotation.standardSets()
+            rotationLoadError = nil
+            return sets
+        } catch {
+            rotationLoadError = error.localizedDescription
+            return []
+        }
     }
 
     private func sort(_ rows: [Card], by sort: CardSort) -> [Card] {
@@ -224,14 +243,19 @@ final class AppModel: ObservableObject {
         return L10n.tr("Untitled deck")
     }
 
-    private func persistSavedDecks() {
-        savedDecks.sort { $0.savedAt > $1.savedAt }
-        try? savedDeckStore.save(savedDecks)
+    private func persistSavedDecks(_ decks: [DeckPreview]) throws {
+        let sorted = decks.sorted { $0.savedAt > $1.savedAt }
+        try savedDeckStore.save(sorted)
+        savedDecks = sorted
     }
 }
 
 extension String {
     var nilIfEmpty: String? {
         isEmpty ? nil : self
+    }
+
+    var rotationToken: String {
+        uppercased().replacingOccurrences(of: "-", with: "_")
     }
 }

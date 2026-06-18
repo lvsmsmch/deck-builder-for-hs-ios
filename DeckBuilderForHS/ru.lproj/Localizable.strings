@@ -38,6 +38,7 @@
 "Details" = "Детали";
 "Druid" = "Друид";
 "Empty deck." = "Колода пуста.";
+"Error" = "Ошибка";
 "English" = "Английский";
 "Filters" = "Фильтры";
 "Format" = "Формат";
@@ -111,6 +112,9 @@
 "deck.warning.incomplete" = "В колоде только %d/%d карт.";
 "default.classDeckName" = "Колода: %@";
 "library.count.format" = "карт: %d";
+"Rotation data failed to load." = "Не удалось загрузить данные ротации.";
+"Rotation data is invalid." = "Данные ротации некорректны.";
+"Standard rotation sets were not found." = "Не удалось найти наборы стандартной ротации.";
 "Armor" = "Броня";
 "Attack" = "Атака";
 "Common" = "Обычная";

@@ -66,7 +66,7 @@ struct CardLibraryView: View {
                 } else if visibleCards.isEmpty && !isLoading {
                     EmptyStateView(
                         title: filters.hasFilters ? L10n.tr("No cards match these filters.") : L10n.tr("No cards loaded yet."),
-                        bodyText: app.cardLoadError ?? L10n.tr("Try changing search or filters."),
+                        bodyText: app.cardLoadError ?? app.rotationLoadError ?? L10n.tr("Try changing search or filters."),
                         icon: "square.grid.2x2"
                     )
                 }
@@ -347,6 +347,7 @@ struct SavedDecksView: View {
     @State private var selectedDeck: Deck?
     @State private var importCode = ""
     @State private var importError: String?
+    @State private var actionError: String?
     @State private var renameDeck: DeckPreview?
     @State private var renameText = ""
 
@@ -372,14 +373,24 @@ struct SavedDecksView: View {
                     List {
                         ForEach(app.savedDecks) { deck in
                             SavedDeckRow(deck: deck) {
-                                Task { selectedDeck = try? await app.decodeDeck(code: deck.code) }
+                                Task {
+                                    do {
+                                        selectedDeck = try await app.decodeDeck(code: deck.code)
+                                    } catch {
+                                        actionError = error.localizedDescription
+                                    }
+                                }
                             } onCopy: {
                                 Clipboard.copy(deck.code)
                             } onRename: {
                                 renameDeck = deck
                                 renameText = deck.name
                             } onDelete: {
-                                app.deleteDeck(code: deck.code)
+                                do {
+                                    try app.deleteDeck(code: deck.code)
+                                } catch {
+                                    actionError = error.localizedDescription
+                                }
                             }
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                             .listRowBackground(AppColor.surface)
@@ -418,10 +429,21 @@ struct SavedDecksView: View {
         .alert(L10n.tr("Rename deck"), isPresented: Binding(get: { renameDeck != nil }, set: { if !$0 { renameDeck = nil } })) {
             TextField(L10n.tr("Deck name"), text: $renameText)
             Button(L10n.tr("Save")) {
-                if let deck = renameDeck { app.renameDeck(code: deck.code, name: renameText) }
-                renameDeck = nil
+                do {
+                    if let deck = renameDeck {
+                        try app.renameDeck(code: deck.code, name: renameText)
+                    }
+                    renameDeck = nil
+                } catch {
+                    actionError = error.localizedDescription
+                }
             }
             Button(L10n.tr("Cancel"), role: .cancel) { renameDeck = nil }
+        }
+        .alert(L10n.tr("Error"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button(L10n.tr("OK"), role: .cancel) { actionError = nil }
+        } message: {
+            Text(actionError ?? "")
         }
     }
 
@@ -523,6 +545,7 @@ struct DeckView: View {
     @Environment(\.dismiss) private var dismiss
     let deck: Deck
     @State private var selectedCard: Card?
+    @State private var actionError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -566,7 +589,11 @@ struct DeckView: View {
                 }
                 .buttonStyle(.bordered)
                 Button {
-                    app.save(deck: deck)
+                    do {
+                        try app.save(deck: deck)
+                    } catch {
+                        actionError = error.localizedDescription
+                    }
                 } label: {
                     Text(L10n.tr("Save"))
                 }
@@ -578,6 +605,11 @@ struct DeckView: View {
         .navigationTitle("")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("Close")) { dismiss() } } }
         .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
+        .alert(L10n.tr("Error"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button(L10n.tr("OK"), role: .cancel) { actionError = nil }
+        } message: {
+            Text(actionError ?? "")
+        }
         .appBackground()
     }
 }
@@ -831,7 +863,7 @@ struct DeckBuilderView: View {
         do {
             let ids = deckEntries.flatMap { Array(repeating: $0.card.id, count: $0.count) }
             let built = try app.assembleDeck(ids: ids, heroCardId: heroCardId, format: format)
-            app.save(deck: built)
+            try app.save(deck: built)
             onSaved(built)
         } catch {
             alertMessage = error.localizedDescription
@@ -929,6 +961,9 @@ struct CardDataView: View {
                 LabeledContent(L10n.tr("Cards loaded"), value: "\(app.cards.count)")
                 LabeledContent(L10n.tr("Locale"), value: app.preferences.cardLocale)
                 if let error = app.cardLoadError {
+                    Text(error).foregroundStyle(AppColor.error)
+                }
+                if let error = app.rotationLoadError {
                     Text(error).foregroundStyle(AppColor.error)
                 }
                 Button {
