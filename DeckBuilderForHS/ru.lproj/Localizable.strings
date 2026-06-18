@@ -60,6 +60,7 @@
 "Neutral" = "Нейтрал";
 "New deck" = "Новая колода";
 "Newest" = "Сначала новые";
+"Oldest" = "Сначала старые";
 "No cards loaded yet." = "Карты еще не загружены.";
 "No cards match these filters." = "Под эти фильтры ничего не найдено.";
 "No saved decks yet." = "Колоды еще не сохранены.";

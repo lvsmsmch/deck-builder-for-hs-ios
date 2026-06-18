@@ -4,16 +4,85 @@ import UIKit
 #endif
 
 struct RootView: View {
+    @State private var selectedTab: AppTab = .library
+
     var body: some View {
-        TabView {
-            NavigationStack { CardLibraryView() }
-                .tabItem { Label(L10n.tr("Library"), systemImage: "square.grid.2x2") }
-            NavigationStack { SavedDecksView() }
-                .tabItem { Label(L10n.tr("Saved"), systemImage: "bookmark") }
-            NavigationStack { MoreView() }
-                .tabItem { Label(L10n.tr("More"), systemImage: "ellipsis") }
+        ZStack {
+            switch selectedTab {
+            case .library:
+                NavigationStack { CardLibraryView() }
+            case .saved:
+                NavigationStack { SavedDecksView() }
+            case .more:
+                NavigationStack { MoreView() }
+            }
         }
         .appBackground()
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            AppBottomBar(selectedTab: $selectedTab)
+        }
+    }
+}
+
+private enum AppTab: CaseIterable {
+    case library
+    case saved
+    case more
+
+    var title: String {
+        switch self {
+        case .library: L10n.tr("Library")
+        case .saved: L10n.tr("Saved")
+        case .more: L10n.tr("More")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .library: "square.grid.2x2"
+        case .saved: "bookmark"
+        case .more: "ellipsis"
+        }
+    }
+}
+
+private struct AppBottomBar: View {
+    @Binding var selectedTab: AppTab
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    VStack(spacing: 4) {
+                        ZStack {
+                            if selectedTab == tab {
+                                Capsule()
+                                    .fill(AppColor.primarySoft)
+                                    .frame(width: 64, height: 32)
+                            }
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 22, weight: .semibold))
+                        }
+                        .frame(height: 34)
+                        Text(tab.title)
+                            .font(.caption.weight(.medium))
+                    }
+                    .foregroundStyle(selectedTab == tab ? AppColor.primary : AppColor.onSurfaceDimmer)
+                    .frame(maxWidth: .infinity, minHeight: 64)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
+        .background(AppColor.surfaceContainer.ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppColor.outlineSoft)
+                .frame(height: 1)
+        }
     }
 }
 
@@ -28,7 +97,10 @@ struct CardLibraryView: View {
     @State private var selectedCard: Card?
     @State private var showFilters = false
 
-    private let columns = [GridItem(.adaptive(minimum: 112), spacing: 10)]
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,7 +112,7 @@ struct CardLibraryView: View {
 
             ZStack {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 10) {
+                    LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(visibleCards) { card in
                             CardThumbnail(card: card) { selectedCard = card }
                                 .task {
@@ -56,8 +128,8 @@ struct CardLibraryView: View {
                                 .padding()
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 4)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                     .padding(.bottom, 16)
                 }
                 if isLoading && visibleCards.isEmpty {
@@ -85,53 +157,75 @@ struct CardLibraryView: View {
     }
 
     private var libraryHeader: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
                 Text(L10n.tr("Library"))
-                    .font(.title2.weight(.bold))
-                Text(L10n.cardsCount(totalCount))
-                    .font(.caption)
-                    .foregroundStyle(AppColor.onSurfaceDim)
+                    .font(.system(size: 22, weight: .semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                sortMenu
+                filterButton
             }
-            Spacer()
-            Menu {
-                Button(L10n.tr("Mana asc")) { filters.sort = CardSort(key: .manaCost, direction: .ascending) }
-                Button(L10n.tr("Mana desc")) { filters.sort = CardSort(key: .manaCost, direction: .descending) }
-                Button(L10n.tr("Name")) { filters.sort = CardSort(key: .name, direction: .ascending) }
-                Button(L10n.tr("Newest")) { filters.sort = CardSort(key: .dateAdded, direction: .ascending) }
-                Button(L10n.tr("By class")) { filters.sort = CardSort(key: .groupByClass, direction: .ascending) }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .frame(width: 40, height: 40)
-                    .background(AppColor.surfaceContainer)
-                    .clipShape(Circle())
-            }
-            Button { showFilters = true } label: {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                        .frame(width: 40, height: 40)
-                        .background(AppColor.surfaceContainer)
+            Text(L10n.cardsCount(totalCount))
+                .font(.caption)
+                .foregroundStyle(AppColor.onSurfaceDim)
+                .padding(.top, 4)
+        }
+        .padding(.leading, 20)
+        .padding(.trailing, 8)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Button(L10n.tr("Mana asc")) { filters.sort = CardSort(key: .manaCost, direction: .ascending) }
+            Button(L10n.tr("Mana desc")) { filters.sort = CardSort(key: .manaCost, direction: .descending) }
+            Button(L10n.tr("Name")) { filters.sort = CardSort(key: .name, direction: .ascending) }
+            Button(L10n.tr("Newest")) { filters.sort = CardSort(key: .dateAdded, direction: .ascending) }
+            Button(L10n.tr("Oldest")) { filters.sort = CardSort(key: .dateAdded, direction: .descending) }
+            Button(L10n.tr("By class")) { filters.sort = CardSort(key: .groupByClass, direction: .ascending) }
+        } label: {
+            Text(currentSortLabel)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppColor.onSurface)
+                .padding(.horizontal, 12)
+                .frame(height: 40)
+                .background(AppColor.surfaceContainer)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
+        }
+    }
+
+    private var filterButton: some View {
+        Button { showFilters = true } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 21, weight: .medium))
+                    .foregroundStyle(AppColor.onSurface)
+                    .frame(width: 44, height: 44)
+                if filters.activeFilterCount > 0 {
+                    Text("\(filters.activeFilterCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(AppColor.onPrimary)
+                        .frame(width: 16, height: 16)
+                        .background(AppColor.primary)
                         .clipShape(Circle())
-                    if filters.activeFilterCount > 0 {
-                        Text("\(filters.activeFilterCount)")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(AppColor.onPrimary)
-                            .frame(width: 17, height: 17)
-                            .background(AppColor.primary)
-                            .clipShape(Circle())
-                    }
+                        .offset(x: -3, y: 3)
                 }
             }
-            Button { app.refreshCards() } label: {
-                Image(systemName: "arrow.clockwise")
-                    .frame(width: 40, height: 40)
-                    .background(AppColor.surfaceContainer)
-                    .clipShape(Circle())
-            }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
+        .buttonStyle(.plain)
+    }
+
+    private var currentSortLabel: String {
+        switch (filters.sort.key, filters.sort.direction) {
+        case (.manaCost, .ascending): L10n.tr("Mana asc")
+        case (.manaCost, .descending): L10n.tr("Mana desc")
+        case (.name, _): L10n.tr("Name")
+        case (.dateAdded, .ascending): L10n.tr("Newest")
+        case (.dateAdded, .descending): L10n.tr("Oldest")
+        case (.groupByClass, _): L10n.tr("By class")
+        }
     }
 
     private func reload() async {
@@ -877,42 +971,75 @@ struct DeckBuilderView: View {
 
 struct MoreView: View {
     var body: some View {
-        List {
-            Section {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(L10n.tr("More"))
+                .font(.system(size: 22, weight: .semibold))
+                .padding(.leading, 20)
+                .padding(.trailing, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+
+            VStack(spacing: 10) {
                 NavigationLink {
                     SettingsView()
                 } label: {
-                    Label {
-                        VStack(alignment: .leading) {
-                            Text(L10n.tr("Settings"))
-                            Text(L10n.tr("Theme, language, privacy"))
-                                .font(.caption)
-                                .foregroundStyle(AppColor.onSurfaceDim)
-                        }
-                    } icon: {
-                        Image(systemName: "gearshape")
-                    }
+                    MoreHubRow(
+                        icon: "gearshape",
+                        title: L10n.tr("Settings"),
+                        subtitle: L10n.tr("Theme, language, privacy")
+                    )
                 }
+                .buttonStyle(.plain)
+
                 NavigationLink {
                     CardDataView()
                 } label: {
-                    Label {
-                        VStack(alignment: .leading) {
-                            Text(L10n.tr("Card data"))
-                            Text(L10n.tr("Build, last update check"))
-                                .font(.caption)
-                                .foregroundStyle(AppColor.onSurfaceDim)
-                        }
-                    } icon: {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                    }
+                    MoreHubRow(
+                        icon: "curlybraces",
+                        title: L10n.tr("Card data"),
+                        subtitle: L10n.tr("Build, last update check")
+                    )
                 }
+                .buttonStyle(.plain)
             }
-            .listRowBackground(AppColor.surfaceContainer)
+            .padding(.horizontal, 16)
+
+            Spacer()
         }
-        .navigationTitle(L10n.tr("More"))
-        .scrollContentBackground(.hidden)
         .appBackground()
+    }
+}
+
+struct MoreHubRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(AppColor.onSurface)
+                .frame(width: 36, height: 36)
+                .background(AppColor.surfaceContainerHigh)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(AppColor.onSurface)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(AppColor.onSurfaceDim)
+            }
+            Spacer()
+            Text("›")
+                .font(.title2)
+                .foregroundStyle(AppColor.onSurfaceDimmer)
+        }
+        .padding(14)
+        .background(AppColor.surfaceContainer)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
     }
 }
 

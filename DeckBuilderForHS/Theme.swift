@@ -12,7 +12,7 @@ enum AppColor {
     static let onSurfaceDimmer = Color(hex: 0x6B7178)
     static let primary = Color(hex: 0x7C8CFF)
     static let onPrimary = Color(hex: 0x0B0B0E)
-    static let primarySoft = Color(hex: 0x1A7C8CFF)
+    static let primarySoft = Color(hex: 0x7C8CFF, alpha: 0.13)
     static let secondary = Color(hex: 0xFFB454)
     static let error = Color(hex: 0xFF6E6E)
     static let success = Color(hex: 0x5CC58A)

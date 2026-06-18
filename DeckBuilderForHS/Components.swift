@@ -144,7 +144,7 @@ struct SearchField: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(AppColor.onSurfaceDimmer)
+                .foregroundStyle(AppColor.onSurfaceDim)
             TextField(placeholder, text: $text)
                 .autocorrectionDisabled()
                 .foregroundStyle(AppColor.onSurface)
@@ -158,10 +158,9 @@ struct SearchField: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: 44)
+        .frame(height: 56)
         .background(AppColor.surfaceContainer)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .padding(.horizontal, 16)
     }
 }
@@ -171,25 +170,29 @@ struct ManaChips: View {
     let onToggle: (Int) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(0...7, id: \.self) { cost in
-                    Button {
-                        onToggle(cost)
-                    } label: {
-                        Text(cost == 7 ? "7+" : "\(cost)")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(selected.contains(cost) ? AppColor.onPrimary : AppColor.onSurfaceDim)
-                            .frame(minWidth: 34, minHeight: 34)
-                            .background(selected.contains(cost) ? AppColor.primary : AppColor.surfaceContainer)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
+        HStack(spacing: 4) {
+            ForEach(0...7, id: \.self) { cost in
+                let isSelected = selected.contains(cost)
+                Button {
+                    onToggle(cost)
+                } label: {
+                    Text(cost == 7 ? "7+" : "\(cost)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(isSelected ? AppColor.primary : AppColor.onSurfaceDim)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(isSelected ? AppColor.primarySoft : AppColor.surfaceContainer)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(isSelected ? AppColor.primary : AppColor.outlineSoft, lineWidth: 1)
+                        )
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 
@@ -200,24 +203,30 @@ struct ClassChips: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(ClassLabels.order, id: \.self) { slug in
+                ForEach(ClassLabels.order + ["neutral"], id: \.self) { slug in
                     let isSelected = selected.contains(slug)
                     Button {
                         onToggle(slug)
                     } label: {
-                        Text(ClassLabels.short(slug))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(isSelected ? .white : AppColor.onSurfaceDim)
-                            .padding(.horizontal, 12)
-                            .frame(height: 34)
-                            .background(isSelected ? AppColor.classColor(slug) : AppColor.surfaceContainer)
-                            .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(AppColor.classColor(slug))
+                                .frame(width: 8, height: 8)
+                            Text(ClassLabels.short(slug))
+                                .font(.caption.weight(.medium))
+                        }
+                        .foregroundStyle(isSelected ? AppColor.primary : AppColor.onSurfaceDim)
+                        .padding(.horizontal, 14)
+                        .frame(height: 40)
+                        .background(isSelected ? AppColor.primarySoft : AppColor.surfaceContainer)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(isSelected ? AppColor.primary : AppColor.outlineSoft, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.bottom, 10)
         }
     }
 }
