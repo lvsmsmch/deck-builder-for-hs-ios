@@ -28,6 +28,13 @@ struct Card: Identifiable, Codable, Hashable {
     var isLegendary: Bool { rarity?.slug == "legendary" }
     var isPrinceRenathal: Bool { slug.caseInsensitiveCompare("REV_018") == .orderedSame || slug.caseInsensitiveCompare("CORE_REV_018") == .orderedSame }
     var primaryClassSlug: String? { classes.first(where: { $0.slug != "neutral" })?.slug ?? classes.first?.slug }
+    var isHiddenFromLibrary: Bool {
+        if cardSet?.slug == "hero-skins" { return true }
+        guard cardType.slug == "hero", text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true else {
+            return false
+        }
+        return slug.range(of: #"^HERO_\d+[A-Za-z]*$"#, options: .regularExpression) != nil
+    }
 }
 
 struct ClassMeta: Codable, Hashable {

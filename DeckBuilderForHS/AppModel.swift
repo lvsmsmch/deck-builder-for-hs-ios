@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftUI
 
 @MainActor
@@ -14,6 +15,7 @@ final class AppModel: ObservableObject {
     private let rotation = RotationService()
     private let preferencesStore = PreferencesStore()
     private let savedDeckStore = SavedDeckStore()
+    private let logger = Logger(subsystem: "com.lvsmsmch.deckbuilder", category: "CardLibrary")
     private var cardIndexById: [Int: Card] = [:]
     private var cardIndexBySlug: [String: Card] = [:]
     private var lastLoadedLocale: String?
@@ -76,7 +78,9 @@ final class AppModel: ObservableObject {
         let safePage = max(1, min(page, pageCount))
         let start = min((safePage - 1) * pageSize, total)
         let end = min(start + pageSize, total)
-        return Page(items: Array(matched[start..<end]), pageNumber: safePage, pageCount: pageCount, totalCount: total)
+        let items = Array(matched[start..<end])
+        logSearch(filters: filters, page: safePage, pageCount: pageCount, total: total, items: items)
+        return Page(items: items, pageNumber: safePage, pageCount: pageCount, totalCount: total)
     }
 
     func decodeDeck(code: String) async throws -> Deck {
@@ -157,6 +161,7 @@ final class AppModel: ObservableObject {
         let q = filters.textQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let expandedMana = Set(filters.manaCosts.flatMap { $0 >= 7 ? Array(7...30) : [$0] })
         let rows = cards.filter { card in
+            if card.isHiddenFromLibrary { return false }
             if filters.collectibleOnly && !card.collectible { return false }
             if !filters.classes.isEmpty {
                 let cardClasses = Set(card.classes.map(\.slug))
@@ -182,6 +187,18 @@ final class AppModel: ObservableObject {
             return true
         }
         return dedupeReprints(sort(rows, by: filters.sort))
+    }
+
+    private func logSearch(filters: CardFilters, page: Int, pageCount: Int, total: Int, items: [Card]) {
+        let hiddenCount = cards.lazy.filter(\.isHiddenFromLibrary).count
+        let summary = "searchCards locale=\(preferences.cardLocale) raw=\(cards.count) hidden=\(hiddenCount) visibleTotal=\(total) page=\(page)/\(pageCount) collectibleOnly=\(filters.collectibleOnly) q='\(filters.textQuery)'"
+        logger.info("\(summary, privacy: .public)")
+        NSLog("[CardLibrary] %@", summary)
+        let sample = items.prefix(8).map { "\($0.name)[\($0.slug),\($0.cardSet?.slug ?? "-"),\($0.cardType.slug)]" }.joined(separator: ", ")
+        if !sample.isEmpty {
+            logger.debug("searchCards firstItems=\(sample, privacy: .public)")
+            NSLog("[CardLibrary] firstItems=%@", sample)
+        }
     }
 
     private func standardSetsIfNeeded(for filters: CardFilters) async -> Set<String> {
