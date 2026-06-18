@@ -31,36 +31,98 @@ actor HsJsonService {
     private let session: URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
+    private let cacheCheckInterval: TimeInterval = 12 * 60 * 60
 
     init(session: URLSession = .shared) {
         self.session = session
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        decoder.dateDecodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .iso8601
     }
 
-    func loadCards(locale: String, forceRefresh: Bool) async throws -> [Card] {
-        if !forceRefresh, let cached = try? loadCached(locale: locale), !cached.isEmpty {
+    func loadCards(locale: String, forceRefresh: Bool) async throws -> CardCacheSnapshot {
+        let cached = try? loadCached(locale: locale)
+        if !forceRefresh,
+           let cached,
+           !cached.cards.isEmpty,
+           let lastCheckedAt = cached.info.lastCheckedAt,
+           Date().timeIntervalSince(lastCheckedAt) < cacheCheckInterval {
             return cached
         }
-        let url = URL(string: "https://api.hearthstonejson.com/v1/latest/\(locale)/cards.json")!
+
+        do {
+            let latest = try await latestBuild()
+            if !forceRefresh, let cached, !cached.cards.isEmpty, cached.info.build == latest {
+                let updated = CardCacheSnapshot(
+                    cards: cached.cards,
+                    info: CardCacheInfo(
+                        locale: locale,
+                        build: latest,
+                        fetchedAt: cached.info.fetchedAt,
+                        lastCheckedAt: Date()
+                    )
+                )
+                try cache(snapshot: updated)
+                return updated
+            }
+
+            return try await fetchCards(locale: locale, build: latest)
+        } catch {
+            if !forceRefresh, let cached, !cached.cards.isEmpty {
+                return cached
+            }
+            throw error
+        }
+    }
+
+    private func latestBuild() async throws -> String {
+        let url = URL(string: "https://api.hearthstonejson.com/v1/latest/")!
+        let (data, response) = try await session.data(from: url)
+        guard (response as? HTTPURLResponse).map({ 200..<300 ~= $0.statusCode }) == true else {
+            throw URLError(.badServerResponse)
+        }
+        guard let html = String(data: data, encoding: .utf8),
+              let regex = try? NSRegularExpression(pattern: #"href="/v1/(\d+)/?""#),
+              let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..<html.endIndex, in: html)),
+              let range = Range(match.range(at: 1), in: html) else {
+            throw URLError(.cannotParseResponse)
+        }
+        return String(html[range])
+    }
+
+    private func fetchCards(locale: String, build: String) async throws -> CardCacheSnapshot {
+        let url = URL(string: "https://api.hearthstonejson.com/v1/\(build)/\(locale)/cards.json")!
         let (data, response) = try await session.data(from: url)
         guard (response as? HTTPURLResponse).map({ 200..<300 ~= $0.statusCode }) == true else {
             throw URLError(.badServerResponse)
         }
         let rows = try decoder.decode([HsJsonCardDTO].self, from: data)
         let cards = rows.compactMap { $0.toDomain(locale: locale) }
-        try cache(cards: cards, locale: locale)
-        return cards
+        let now = Date()
+        let snapshot = CardCacheSnapshot(
+            cards: cards,
+            info: CardCacheInfo(locale: locale, build: build, fetchedAt: now, lastCheckedAt: now)
+        )
+        try cache(snapshot: snapshot)
+        return snapshot
     }
 
-    private func loadCached(locale: String) throws -> [Card] {
+    private func loadCached(locale: String) throws -> CardCacheSnapshot {
         let data = try Data(contentsOf: cacheURL(locale: locale))
-        return try decoder.decode([Card].self, from: data)
+        if let payload = try? decoder.decode(CardCachePayload.self, from: data) {
+            return CardCacheSnapshot(cards: payload.cards, info: payload.info)
+        }
+        let cards = try decoder.decode([Card].self, from: data)
+        return CardCacheSnapshot(
+            cards: cards,
+            info: CardCacheInfo(locale: locale, build: nil, fetchedAt: nil, lastCheckedAt: nil)
+        )
     }
 
-    private func cache(cards: [Card], locale: String) throws {
-        let url = cacheURL(locale: locale)
+    private func cache(snapshot: CardCacheSnapshot) throws {
+        let url = cacheURL(locale: snapshot.info.locale)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try encoder.encode(cards).write(to: url, options: [.atomic])
+        try encoder.encode(CardCachePayload(cards: snapshot.cards, info: snapshot.info)).write(to: url, options: [.atomic])
     }
 
     private func cacheURL(locale: String) -> URL {
@@ -68,6 +130,23 @@ actor HsJsonService {
             .appendingPathComponent("CardCache", isDirectory: true)
             .appendingPathComponent("cards-\(locale).json")
     }
+}
+
+struct CardCacheSnapshot {
+    let cards: [Card]
+    let info: CardCacheInfo
+}
+
+struct CardCacheInfo: Codable, Equatable {
+    let locale: String
+    let build: String?
+    let fetchedAt: Date?
+    let lastCheckedAt: Date?
+}
+
+private struct CardCachePayload: Codable {
+    let cards: [Card]
+    let info: CardCacheInfo
 }
 
 actor RotationService {

@@ -6,6 +6,7 @@
 "Apply" = "Применить";
 "Back" = "Назад";
 "Build, last update check" = "Билд, последняя проверка";
+"Build" = "Билд";
 "By class" = "По классу";
 "Cancel" = "Отмена";
 "Card data" = "Данные карт";
@@ -36,6 +37,7 @@
 "Demon H." = "ОнД";
 "Demon Hunter" = "Охотник на демонов";
 "Details" = "Детали";
+"Downloaded" = "Скачано";
 "Druid" = "Друид";
 "Empty deck." = "Колода пуста.";
 "Error" = "Ошибка";
@@ -52,6 +54,7 @@
 "Library" = "Карты";
 "Loading cards..." = "Загружаем карты...";
 "Locale" = "Локаль";
+"Last update check" = "Последняя проверка";
 "Mage" = "Маг";
 "Mana asc" = "Мана вверх";
 "Mana desc" = "Мана вниз";

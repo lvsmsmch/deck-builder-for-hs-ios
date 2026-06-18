@@ -8,6 +8,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var cards: [Card] = []
     @Published private(set) var isLoadingCards = false
     @Published private(set) var cardLoadError: String?
+    @Published private(set) var cardCacheInfo: CardCacheInfo?
     @Published private(set) var rotationLoadError: String?
     @Published var savedDecks: [DeckPreview] = []
 
@@ -50,8 +51,9 @@ final class AppModel: ObservableObject {
         isLoadingCards = true
         cardLoadError = nil
         do {
-            let loaded = try await hsJson.loadCards(locale: preferences.cardLocale, forceRefresh: forceRefresh)
-            installCards(loaded)
+            let snapshot = try await hsJson.loadCards(locale: preferences.cardLocale, forceRefresh: forceRefresh)
+            installCards(snapshot.cards)
+            cardCacheInfo = snapshot.info
             lastLoadedLocale = preferences.cardLocale
         } catch {
             cardLoadError = error.localizedDescription

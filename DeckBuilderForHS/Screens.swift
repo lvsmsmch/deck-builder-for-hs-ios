@@ -1087,6 +1087,9 @@ struct CardDataView: View {
             Section(L10n.tr("Card data")) {
                 LabeledContent(L10n.tr("Cards loaded"), value: "\(app.cards.count)")
                 LabeledContent(L10n.tr("Locale"), value: app.preferences.cardLocale)
+                LabeledContent(L10n.tr("Build"), value: app.cardCacheInfo?.build ?? "-")
+                LabeledContent(L10n.tr("Downloaded"), value: formatted(app.cardCacheInfo?.fetchedAt))
+                LabeledContent(L10n.tr("Last update check"), value: formatted(app.cardCacheInfo?.lastCheckedAt))
                 if let error = app.cardLoadError {
                     Text(error).foregroundStyle(AppColor.error)
                 }
@@ -1107,5 +1110,10 @@ struct CardDataView: View {
         .navigationTitle(L10n.tr("Card data"))
         .scrollContentBackground(.hidden)
         .appBackground()
+    }
+
+    private func formatted(_ date: Date?) -> String {
+        guard let date else { return "-" }
+        return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
     }
 }

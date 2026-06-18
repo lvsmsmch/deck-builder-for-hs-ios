@@ -6,6 +6,7 @@
 "Apply" = "Apply";
 "Back" = "Back";
 "Build, last update check" = "Build, last update check";
+"Build" = "Build";
 "By class" = "By class";
 "Cancel" = "Cancel";
 "Card data" = "Card data";
@@ -36,6 +37,7 @@
 "Demon H." = "Demon H.";
 "Demon Hunter" = "Demon Hunter";
 "Details" = "Details";
+"Downloaded" = "Downloaded";
 "Druid" = "Druid";
 "Empty deck." = "Empty deck.";
 "Error" = "Error";
@@ -52,6 +54,7 @@
 "Library" = "Library";
 "Loading cards..." = "Loading cards...";
 "Locale" = "Locale";
+"Last update check" = "Last update check";
 "Mage" = "Mage";
 "Mana asc" = "Mana asc";
 "Mana desc" = "Mana desc";
