@@ -375,11 +375,9 @@ struct CardLibraryView: View {
     @State private var isLoading = false
     @State private var selectedCard: Card?
     @State private var showFilters = false
+    @State private var searchRevision = 0
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    private let columns = [GridItem(.adaptive(minimum: 112), spacing: 10)]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -391,7 +389,7 @@ struct CardLibraryView: View {
 
             ZStack {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 12) {
+                    LazyVGrid(columns: columns, spacing: 10) {
                         ForEach(visibleCards) { card in
                             CardThumbnail(card: card) { selectedCard = card }
                                 .task {
@@ -409,7 +407,7 @@ struct CardLibraryView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 110)
                 }
                 if isLoading && visibleCards.isEmpty {
                     ProgressView(L10n.tr("Loading cards..."))
@@ -508,9 +506,12 @@ struct CardLibraryView: View {
     }
 
     private func reload() async {
+        searchRevision += 1
+        let revision = searchRevision
         isLoading = true
         page = 1
         let result = await app.searchCards(filters: filters, page: 1)
+        guard revision == searchRevision else { return }
         visibleCards = result.items
         pageCount = result.pageCount
         totalCount = result.totalCount
@@ -519,8 +520,10 @@ struct CardLibraryView: View {
 
     private func loadNextPage() async {
         guard !isLoading, page < pageCount else { return }
+        let revision = searchRevision
         isLoading = true
         let result = await app.searchCards(filters: filters, page: page + 1)
+        guard revision == searchRevision else { return }
         page = result.pageNumber
         pageCount = result.pageCount
         totalCount = result.totalCount
@@ -570,33 +573,55 @@ struct FilterSheet: View {
                         .padding(8)
                     }
 
-                    SettingsGroup(title: L10n.tr("Rarity")) {
-                        multiRow("Common", "common", selection: $filters.rarities)
-                        SettingsDivider()
-                        multiRow("Rare", "rare", selection: $filters.rarities)
-                        SettingsDivider()
-                        multiRow("Epic", "epic", selection: $filters.rarities)
-                        SettingsDivider()
-                        multiRow("Legendary", "legendary", selection: $filters.rarities)
+                    FilterSection(title: L10n.tr("Mana cost")) {
+                        HStack(spacing: 6) {
+                            ForEach(0...7, id: \.self) { cost in
+                                let isSelected = filters.manaCosts.contains(cost)
+                                Button {
+                                    toggle(cost, in: &filters.manaCosts)
+                                } label: {
+                                    Text(cost == 7 ? "7+" : "\(cost)")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(isSelected ? AppColor.primary : AppColor.onSurfaceDim)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 42)
+                                        .background(isSelected ? AppColor.primarySoft : AppColor.surfaceContainerHigh)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(isSelected ? AppColor.primary : AppColor.outlineSoft, lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
 
-                    SettingsGroup(title: L10n.tr("Type")) {
-                        multiRow("Minion", "minion", selection: $filters.types)
-                        SettingsDivider()
-                        multiRow("Spell", "spell", selection: $filters.types)
-                        SettingsDivider()
-                        multiRow("Weapon", "weapon", selection: $filters.types)
-                        SettingsDivider()
-                        multiRow("Hero", "hero", selection: $filters.types)
-                        SettingsDivider()
-                        multiRow("Location", "location", selection: $filters.types)
+                    chipSection(title: L10n.tr("Rarity"), options: rarityOptions, selection: $filters.rarities) { option in
+                        L10n.tr(option.label)
+                    } leadingColor: { option in
+                        AppColor.rarityColor(option.value)
                     }
 
-                    SettingsGroup(title: L10n.tr("Options")) {
-                        SettingsRow(title: L10n.tr("Collectible only")) {
-                            Toggle("", isOn: $filters.collectibleOnly)
-                                .labelsHidden()
-                                .tint(AppColor.primary)
+                    chipSection(title: L10n.tr("Type"), options: typeOptions, selection: $filters.types) { option in
+                        L10n.tr(option.label)
+                    }
+
+                    chipSection(title: L10n.tr("Minion type"), options: minionTypeOptions, selection: $filters.minionTypes) { option in
+                        L10n.tr(option.label)
+                    }
+
+                    chipSection(title: L10n.tr("Spell school"), options: spellSchoolOptions, selection: $filters.spellSchools) { option in
+                        L10n.tr(option.label)
+                    }
+
+                    chipSection(title: L10n.tr("Set (recent)"), options: setOptions, selection: $filters.sets) { option in
+                        setLabel(option.value)
+                    }
+
+                    FilterSection(title: L10n.tr("Show non-collectible")) {
+                        FilterChip(
+                            label: filters.collectibleOnly ? L10n.tr("Collectible only") : L10n.tr("All cards"),
+                            isSelected: !filters.collectibleOnly
+                        ) {
+                            filters.collectibleOnly.toggle()
                         }
                     }
                 }
@@ -632,28 +657,156 @@ struct FilterSheet: View {
         .buttonStyle(.plain)
     }
 
-    private func multiRow(_ label: String, _ value: String, selection: Binding<Set<String>>) -> some View {
-        Button {
-            if selection.wrappedValue.contains(value) {
-                selection.wrappedValue.remove(value)
-            } else {
-                selection.wrappedValue.insert(value)
-            }
-        } label: {
-            HStack {
-                Text(L10n.tr(label))
-                    .font(.body)
-                Spacer()
-                if selection.wrappedValue.contains(value) {
-                    Image(systemName: "checkmark")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(AppColor.primary)
+    private func chipSection(
+        title: String,
+        options: [FilterOption],
+        selection: Binding<Set<String>>,
+        label: @escaping (FilterOption) -> String,
+        leadingColor: @escaping (FilterOption) -> Color? = { _ in nil }
+    ) -> some View {
+        FilterSection(title: title) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(options) { option in
+                    let isSelected = selection.wrappedValue.contains(option.value)
+                    FilterChip(label: label(option), isSelected: isSelected, leadingColor: leadingColor(option)) {
+                        var next = selection.wrappedValue
+                        toggle(option.value, in: &next)
+                        selection.wrappedValue = next
+                    }
                 }
             }
-            .padding(14)
-            .frame(minHeight: 54)
         }
-        .foregroundStyle(AppColor.onSurface)
+    }
+
+    private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
+        if set.contains(value) {
+            set.remove(value)
+        } else {
+            set.insert(value)
+        }
+    }
+
+    private func setLabel(_ slug: String) -> String {
+        let key = "set.\(slug)"
+        let localized = L10n.tr(key)
+        if localized != key { return localized }
+        return slug
+            .split { $0 == "-" || $0 == "_" }
+            .map { word in word.prefix(1).uppercased() + word.dropFirst() }
+            .joined(separator: " ")
+    }
+
+    private var rarityOptions: [FilterOption] {
+        [
+            FilterOption("Common", "common"),
+            FilterOption("Rare", "rare"),
+            FilterOption("Epic", "epic"),
+            FilterOption("Legendary", "legendary")
+        ]
+    }
+
+    private var typeOptions: [FilterOption] {
+        [
+            FilterOption("Minion", "minion"),
+            FilterOption("Spell", "spell"),
+            FilterOption("Weapon", "weapon"),
+            FilterOption("Hero", "hero"),
+            FilterOption("Location", "location")
+        ]
+    }
+
+    private var minionTypeOptions: [FilterOption] {
+        [
+            FilterOption("Beast", "beast"),
+            FilterOption("Demon", "demon"),
+            FilterOption("Dragon", "dragon"),
+            FilterOption("Elemental", "elemental"),
+            FilterOption("Mech", "mech"),
+            FilterOption("Murloc", "murloc"),
+            FilterOption("Naga", "naga"),
+            FilterOption("Pirate", "pirate"),
+            FilterOption("Quilboar", "quilboar"),
+            FilterOption("Totem", "totem"),
+            FilterOption("Undead", "undead")
+        ]
+    }
+
+    private var spellSchoolOptions: [FilterOption] {
+        [
+            FilterOption("Arcane", "arcane"),
+            FilterOption("Fire", "fire"),
+            FilterOption("Frost", "frost"),
+            FilterOption("Holy", "holy"),
+            FilterOption("Nature", "nature"),
+            FilterOption("Shadow", "shadow"),
+            FilterOption("Fel", "fel")
+        ]
+    }
+
+    private var setOptions: [FilterOption] {
+        [
+            "core", "expert1", "naxx", "gvg", "brm", "tgt", "loe", "og", "kara", "gangs",
+            "ungoro", "icecrown", "lootapalooza", "gilneas", "boomsday", "troll", "dalaran",
+            "uldum", "dragons", "black-temple", "scholomance", "darkmoon-faire", "the-barrens",
+            "stormwind", "alterac-valley", "the-sunken-city", "revendreth",
+            "return-of-the-lich-king", "battle-of-the-bands", "titans", "wild-west",
+            "whizbangs-workshop", "island-vacation", "space", "the-lost-city"
+        ].map { FilterOption($0, $0) }
+    }
+}
+
+private struct FilterOption: Identifiable {
+    let label: String
+    let value: String
+
+    var id: String { value }
+
+    init(_ label: String, _ value: String) {
+        self.label = label
+        self.value = value
+    }
+}
+
+private struct FilterSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(AppColor.onSurface)
+            content
+        }
+    }
+}
+
+private struct FilterChip: View {
+    let label: String
+    let isSelected: Bool
+    var leadingColor: Color?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                if let leadingColor {
+                    Circle()
+                        .fill(leadingColor)
+                        .frame(width: 8, height: 8)
+                }
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
+            .foregroundStyle(isSelected ? AppColor.primary : AppColor.onSurfaceDim)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .background(isSelected ? AppColor.primarySoft : AppColor.surfaceContainerHigh)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(isSelected ? AppColor.primary : AppColor.outlineSoft, lineWidth: 1))
+        }
         .buttonStyle(.plain)
     }
 }
@@ -880,14 +1033,10 @@ struct SavedDecksView: View {
                     .clipShape(Circle())
                     .shadow(color: .black.opacity(0.35), radius: 14, y: 8)
             }
-            .padding(20)
+            .padding(.trailing, 20)
+            .padding(.bottom, 104)
         }
         .appBackground()
-        .confirmationDialog(L10n.tr("New deck"), isPresented: $showNewDeck) {
-            Button(L10n.tr("Create from scratch")) { showBuilder = true }
-            Button(L10n.tr("Paste deck code")) { showImport = true }
-            Button(L10n.tr("Cancel"), role: .cancel) {}
-        }
         .sheet(isPresented: $showImport) { importSheet }
         .sheet(item: $selectedDeck) { deck in NavigationStack { DeckView(deck: deck) } }
         .sheet(isPresented: $showBuilder) {
@@ -896,24 +1045,47 @@ struct SavedDecksView: View {
                 selectedDeck = deck
             }
         }
-        .alert(L10n.tr("Rename deck"), isPresented: Binding(get: { renameDeck != nil }, set: { if !$0 { renameDeck = nil } })) {
-            TextField(L10n.tr("Deck name"), text: $renameText)
-            Button(L10n.tr("Save")) {
-                do {
-                    if let deck = renameDeck {
-                        try app.renameDeck(code: deck.code, name: renameText)
-                    }
-                    renameDeck = nil
-                } catch {
-                    actionError = error.localizedDescription
+        .overlay {
+            if showNewDeck {
+                NewDeckDialog(
+                    onCreate: {
+                        showNewDeck = false
+                        showBuilder = true
+                    },
+                    onImport: {
+                        showNewDeck = false
+                        showImport = true
+                    },
+                    onCancel: { showNewDeck = false }
+                )
+            }
+            if renameDeck != nil {
+                RenameDeckDialog(
+                    text: $renameText,
+                    onSave: saveRename,
+                    onCancel: { renameDeck = nil }
+                )
+            }
+            if let actionError {
+                DarkMessageDialog(
+                    title: L10n.tr("Error"),
+                    message: actionError,
+                    buttonTitle: L10n.tr("OK")
+                ) {
+                    self.actionError = nil
                 }
             }
-            Button(L10n.tr("Cancel"), role: .cancel) { renameDeck = nil }
         }
-        .alert(L10n.tr("Error"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
-            Button(L10n.tr("OK"), role: .cancel) { actionError = nil }
-        } message: {
-            Text(actionError ?? "")
+    }
+
+    private func saveRename() {
+        do {
+            if let deck = renameDeck {
+                try app.renameDeck(code: deck.code, name: renameText)
+            }
+            renameDeck = nil
+        } catch {
+            actionError = error.localizedDescription
         }
     }
 
@@ -966,6 +1138,190 @@ struct SavedDecksView: View {
             .padding(20)
             .appBackground()
         }
+    }
+}
+
+private struct NewDeckDialog: View {
+    let onCreate: () -> Void
+    let onImport: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        DarkDialogBackdrop(onDismiss: onCancel) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(L10n.tr("New deck"))
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(AppColor.onSurface)
+                DialogActionButton(title: L10n.tr("Create from scratch"), systemImage: "plus.square.on.square", action: onCreate)
+                DialogActionButton(title: L10n.tr("Paste deck code"), systemImage: "doc.on.doc", action: onImport)
+                Button(L10n.tr("Cancel"), action: onCancel)
+                    .font(.headline)
+                    .foregroundStyle(AppColor.onSurfaceDim)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+            }
+            .padding(18)
+            .dialogCard()
+            .padding(.horizontal, 24)
+        }
+    }
+}
+
+private struct RenameDeckDialog: View {
+    @Binding var text: String
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        DarkDialogBackdrop(onDismiss: onCancel) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(L10n.tr("Rename deck"))
+                    .font(.title2.weight(.bold))
+                TextField(L10n.tr("Deck name"), text: $text)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(AppColor.onSurface)
+                    .tint(AppColor.primary)
+                    .padding(12)
+                    .background(AppColor.surfaceContainerHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
+                HStack(spacing: 10) {
+                    Button(L10n.tr("Cancel"), action: onCancel)
+                        .buttonStyle(SecondaryDialogButtonStyle())
+                    Button(L10n.tr("Save"), action: onSave)
+                        .buttonStyle(PrimaryDialogButtonStyle())
+                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(18)
+            .dialogCard()
+            .padding(.horizontal, 24)
+        }
+    }
+}
+
+private struct DarkMessageDialog: View {
+    let title: String
+    let message: String
+    let buttonTitle: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        DarkDialogBackdrop(onDismiss: onDismiss) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(title)
+                    .font(.title2.weight(.bold))
+                Text(message)
+                    .font(.body)
+                    .foregroundStyle(AppColor.onSurfaceDim)
+                Button(buttonTitle, action: onDismiss)
+                    .buttonStyle(PrimaryDialogButtonStyle())
+            }
+            .padding(18)
+            .dialogCard()
+            .padding(.horizontal, 24)
+        }
+    }
+}
+
+private struct DarkConfirmDialog: View {
+    let title: String
+    let message: String
+    let confirmTitle: String
+    let cancelTitle: String
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        DarkDialogBackdrop(onDismiss: onCancel) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(title)
+                    .font(.title2.weight(.bold))
+                Text(message)
+                    .font(.body)
+                    .foregroundStyle(AppColor.onSurfaceDim)
+                HStack(spacing: 10) {
+                    Button(cancelTitle, action: onCancel)
+                        .buttonStyle(SecondaryDialogButtonStyle())
+                    Button(confirmTitle, action: onConfirm)
+                        .buttonStyle(PrimaryDialogButtonStyle())
+                }
+            }
+            .padding(18)
+            .dialogCard()
+            .padding(.horizontal, 24)
+        }
+    }
+}
+
+private struct DialogActionButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.headline)
+                .foregroundStyle(AppColor.onSurface)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 52)
+                .padding(.horizontal, 14)
+                .background(AppColor.surfaceContainerHigh)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct DarkDialogBackdrop<Content: View>: View {
+    let onDismiss: () -> Void
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onDismiss)
+            content
+        }
+    }
+}
+
+private struct PrimaryDialogButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(isEnabled ? AppColor.onPrimary : AppColor.onSurfaceDimmer)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(isEnabled ? AppColor.primary.opacity(configuration.isPressed ? 0.78 : 1) : AppColor.surfaceContainerHighest)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+private struct SecondaryDialogButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(AppColor.onSurface)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(AppColor.surfaceContainerHigh.opacity(configuration.isPressed ? 0.75 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
+    }
+}
+
+private extension View {
+    func dialogCard() -> some View {
+        background(AppColor.surfaceContainer)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
+            .shadow(color: .black.opacity(0.35), radius: 24, y: 12)
     }
 }
 
@@ -1116,10 +1472,16 @@ struct DeckView: View {
             }
         }
         .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
-        .alert(L10n.tr("Error"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
-            Button(L10n.tr("OK"), role: .cancel) { actionError = nil }
-        } message: {
-            Text(actionError ?? "")
+        .overlay {
+            if let actionError {
+                DarkMessageDialog(
+                    title: L10n.tr("Error"),
+                    message: actionError,
+                    buttonTitle: L10n.tr("OK")
+                ) {
+                    self.actionError = nil
+                }
+            }
         }
         .appBackground()
     }
@@ -1194,16 +1556,29 @@ struct DeckBuilderView: View {
                     .accessibilityIdentifier(phaseClassPicker ? "builder.close" : "builder.back")
                 }
             }
-            .alert(L10n.tr("Deck builder"), isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
-                Button(L10n.tr("OK"), role: .cancel) { alertMessage = nil }
-            } message: {
-                Text(alertMessage ?? "")
-            }
-            .confirmationDialog(L10n.tr("Save incomplete deck?"), isPresented: $confirmIncompleteSave) {
-                Button(L10n.tr("Save anyway")) { saveDeck() }
-                Button(L10n.tr("Cancel"), role: .cancel) {}
-            } message: {
-                Text(L10n.incompleteSaveMessage(cardCount, maxDeckSize))
+            .overlay {
+                if let alertMessage {
+                    DarkMessageDialog(
+                        title: L10n.tr("Deck builder"),
+                        message: alertMessage,
+                        buttonTitle: L10n.tr("OK")
+                    ) {
+                        self.alertMessage = nil
+                    }
+                }
+                if confirmIncompleteSave {
+                    DarkConfirmDialog(
+                        title: L10n.tr("Save incomplete deck?"),
+                        message: L10n.incompleteSaveMessage(cardCount, maxDeckSize),
+                        confirmTitle: L10n.tr("Save anyway"),
+                        cancelTitle: L10n.tr("Cancel"),
+                        onConfirm: {
+                            confirmIncompleteSave = false
+                            saveDeck()
+                        },
+                        onCancel: { confirmIncompleteSave = false }
+                    )
+                }
             }
             .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
             .appBackground()

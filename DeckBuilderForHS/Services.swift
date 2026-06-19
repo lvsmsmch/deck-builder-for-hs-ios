@@ -31,7 +31,6 @@ actor HsJsonService {
     private let session: URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
-    private let cacheCheckInterval: TimeInterval = 12 * 60 * 60
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -42,11 +41,7 @@ actor HsJsonService {
 
     func loadCards(locale: String, forceRefresh: Bool) async throws -> CardCacheSnapshot {
         let cached = try? loadCached(locale: locale)
-        if !forceRefresh,
-           let cached,
-           !cached.cards.isEmpty,
-           let lastCheckedAt = cached.info.lastCheckedAt,
-           Date().timeIntervalSince(lastCheckedAt) < cacheCheckInterval {
+        if !forceRefresh, let cached, !cached.cards.isEmpty {
             return cached
         }
 

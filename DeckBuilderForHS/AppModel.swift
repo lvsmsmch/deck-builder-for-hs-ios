@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
     private let logger = Logger(subsystem: "com.lvsmsmch.deckbuilder", category: "CardLibrary")
     private var cardIndexById: [Int: Card] = [:]
     private var cardIndexBySlug: [String: Card] = [:]
+    private var cardLoadTask: Task<CardCacheSnapshot, Error>?
     private var lastLoadedLocale: String?
 
     init() {
@@ -46,19 +47,42 @@ final class AppModel: ObservableObject {
     }
 
     func loadCardsIfNeeded(forceRefresh: Bool = false) async {
-        guard !isLoadingCards else { return }
         if !forceRefresh, !cards.isEmpty, lastLoadedLocale == preferences.cardLocale { return }
+        if let cardLoadTask {
+            do {
+                let snapshot = try await cardLoadTask.value
+                if lastLoadedLocale != snapshot.info.locale || cards.isEmpty {
+                    installCards(snapshot.cards)
+                    cardCacheInfo = snapshot.info
+                    lastLoadedLocale = snapshot.info.locale
+                }
+            } catch {
+                cardLoadError = error.localizedDescription
+            }
+            return
+        }
+
+        let locale = preferences.cardLocale
+        let hsJson = hsJson
+        let task = Task.detached(priority: .userInitiated) {
+            try await hsJson.loadCards(locale: locale, forceRefresh: forceRefresh)
+        }
+        cardLoadTask = task
         isLoadingCards = true
         cardLoadError = nil
+        defer {
+            cardLoadTask = nil
+            isLoadingCards = false
+        }
         do {
-            let snapshot = try await hsJson.loadCards(locale: preferences.cardLocale, forceRefresh: forceRefresh)
+            let snapshot = try await task.value
+            guard preferences.cardLocale == locale else { return }
             installCards(snapshot.cards)
             cardCacheInfo = snapshot.info
-            lastLoadedLocale = preferences.cardLocale
+            lastLoadedLocale = locale
         } catch {
             cardLoadError = error.localizedDescription
         }
-        isLoadingCards = false
     }
 
     func refreshCards() {
@@ -74,15 +98,19 @@ final class AppModel: ObservableObject {
     func searchCards(filters: CardFilters, page: Int = 1, pageSize: Int = 60) async -> Page<Card> {
         await loadCardsIfNeeded()
         let standardSetTokens = await standardSetsIfNeeded(for: filters)
-        let matched = filteredCards(filters: filters, standardSetTokens: standardSetTokens)
-        let total = matched.count
-        let pageCount = max(1, Int(ceil(Double(total) / Double(pageSize))))
-        let safePage = max(1, min(page, pageCount))
-        let start = min((safePage - 1) * pageSize, total)
-        let end = min(start + pageSize, total)
-        let items = Array(matched[start..<end])
-        logSearch(filters: filters, page: safePage, pageCount: pageCount, total: total, items: items)
-        return Page(items: items, pageNumber: safePage, pageCount: pageCount, totalCount: total)
+        let sourceCards = cards
+        let result = await Task.detached(priority: .userInitiated) {
+            let matched = Self.filteredCards(in: sourceCards, filters: filters, standardSetTokens: standardSetTokens)
+            let total = matched.count
+            let pageCount = max(1, Int(ceil(Double(total) / Double(pageSize))))
+            let safePage = max(1, min(page, pageCount))
+            let start = min((safePage - 1) * pageSize, total)
+            let end = min(start + pageSize, total)
+            let items = Array(matched[start..<end])
+            return Page(items: items, pageNumber: safePage, pageCount: pageCount, totalCount: total)
+        }.value
+        logSearch(filters: filters, page: result.pageNumber, pageCount: result.pageCount, total: result.totalCount, items: result.items)
+        return result
     }
 
     func decodeDeck(code: String) async throws -> Deck {
@@ -159,7 +187,7 @@ final class AppModel: ObservableObject {
         return Deck(code: code, format: payload.format.gameFormat, hero: hero, heroClass: heroClass, cards: entries, invalidCardIds: invalid)
     }
 
-    private func filteredCards(filters: CardFilters, standardSetTokens: Set<String>) -> [Card] {
+    nonisolated private static func filteredCards(in cards: [Card], filters: CardFilters, standardSetTokens: Set<String>) -> [Card] {
         let q = filters.textQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let expandedMana = Set(filters.manaCosts.flatMap { $0 >= 7 ? Array(7...30) : [$0] })
         let rows = cards.filter { card in
@@ -193,7 +221,7 @@ final class AppModel: ObservableObject {
 
     private func logSearch(filters: CardFilters, page: Int, pageCount: Int, total: Int, items: [Card]) {
         let hiddenCount = cards.lazy.filter(\.isHiddenFromLibrary).count
-        let summary = "searchCards locale=\(preferences.cardLocale) raw=\(cards.count) hidden=\(hiddenCount) visibleTotal=\(total) page=\(page)/\(pageCount) collectibleOnly=\(filters.collectibleOnly) q='\(filters.textQuery)'"
+        let summary = "searchCards locale=\(preferences.cardLocale) raw=\(cards.count) hidden=\(hiddenCount) visibleTotal=\(total) page=\(page)/\(pageCount) filters=\(Self.filterSummary(filters))"
         logger.info("\(summary, privacy: .public)")
         NSLog("[CardLibrary] %@", summary)
         let sample = items.prefix(8).map { "\($0.name)[\($0.slug),\($0.cardSet?.slug ?? "-"),\($0.cardType.slug)]" }.joined(separator: ", ")
@@ -201,6 +229,21 @@ final class AppModel: ObservableObject {
             logger.debug("searchCards firstItems=\(sample, privacy: .public)")
             NSLog("[CardLibrary] firstItems=%@", sample)
         }
+    }
+
+    nonisolated private static func filterSummary(_ filters: CardFilters) -> String {
+        [
+            "format=\(filters.format.rawValue)",
+            "classes=\(filters.classes.sorted().joined(separator: ","))",
+            "sets=\(filters.sets.sorted().joined(separator: ","))",
+            "mana=\(filters.manaCosts.sorted().map(String.init).joined(separator: ","))",
+            "rarity=\(filters.rarities.sorted().joined(separator: ","))",
+            "type=\(filters.types.sorted().joined(separator: ","))",
+            "minionType=\(filters.minionTypes.sorted().joined(separator: ","))",
+            "spellSchool=\(filters.spellSchools.sorted().joined(separator: ","))",
+            "collectibleOnly=\(filters.collectibleOnly)",
+            "q='\(filters.textQuery)'"
+        ].joined(separator: " ")
     }
 
     private func standardSetsIfNeeded(for filters: CardFilters) async -> Set<String> {
@@ -218,7 +261,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func sort(_ rows: [Card], by sort: CardSort) -> [Card] {
+    nonisolated private static func sort(_ rows: [Card], by sort: CardSort) -> [Card] {
         let sorted: [Card]
         switch sort.key {
         case .manaCost:
@@ -238,7 +281,7 @@ final class AppModel: ObservableObject {
         return sort.direction == .ascending ? sorted : Array(sorted.reversed())
     }
 
-    private func dedupeReprints(_ rows: [Card]) -> [Card] {
+    nonisolated private static func dedupeReprints(_ rows: [Card]) -> [Card] {
         var best: [String: Card] = [:]
         for card in rows where card.cardSet?.slug != "vanilla" {
             let key = [card.name.lowercased(), card.primaryClassSlug ?? "", "\(card.manaCost)", "\(card.attack ?? -1)", "\(card.health ?? -1)", card.cardType.slug, card.text?.lowercased() ?? ""].joined(separator: "|")
