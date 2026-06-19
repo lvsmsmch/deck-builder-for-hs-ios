@@ -15,6 +15,18 @@
 		01A000000000000000000106 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000006 /* Components.swift */; };
 		01A000000000000000000107 /* Screens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000007 /* Screens.swift */; };
 		01A000000000000000000108 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000008 /* Localizable.strings */; };
+		01A000000000000000000109 /* hero_deathknight.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A00000000000000000000B /* hero_deathknight.webp */; };
+		01A00000000000000000010A /* hero_demonhunter.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A00000000000000000000C /* hero_demonhunter.webp */; };
+		01A00000000000000000010B /* hero_druid.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A00000000000000000000D /* hero_druid.webp */; };
+		01A00000000000000000010C /* hero_hunter.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A00000000000000000000E /* hero_hunter.webp */; };
+		01A00000000000000000010D /* hero_mage.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A00000000000000000000F /* hero_mage.webp */; };
+		01A00000000000000000010E /* hero_paladin.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000010 /* hero_paladin.webp */; };
+		01A00000000000000000010F /* hero_priest.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000011 /* hero_priest.webp */; };
+		01A000000000000000000110 /* hero_rogue.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000012 /* hero_rogue.webp */; };
+		01A000000000000000000111 /* hero_shaman.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000013 /* hero_shaman.webp */; };
+		01A000000000000000000112 /* hero_warlock.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000014 /* hero_warlock.webp */; };
+		01A000000000000000000113 /* hero_warrior.webp in Resources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000015 /* hero_warrior.webp */; };
+		01A000000000000000000114 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 01A000000000000000000016 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +39,18 @@
 		01A000000000000000000007 /* Screens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens.swift; sourceTree = "<group>"; };
 		01A000000000000000000009 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		01A00000000000000000000A /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
+		01A00000000000000000000B /* hero_deathknight.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_deathknight.webp; sourceTree = "<group>"; };
+		01A00000000000000000000C /* hero_demonhunter.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_demonhunter.webp; sourceTree = "<group>"; };
+		01A00000000000000000000D /* hero_druid.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_druid.webp; sourceTree = "<group>"; };
+		01A00000000000000000000E /* hero_hunter.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_hunter.webp; sourceTree = "<group>"; };
+		01A00000000000000000000F /* hero_mage.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_mage.webp; sourceTree = "<group>"; };
+		01A000000000000000000010 /* hero_paladin.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_paladin.webp; sourceTree = "<group>"; };
+		01A000000000000000000011 /* hero_priest.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_priest.webp; sourceTree = "<group>"; };
+		01A000000000000000000012 /* hero_rogue.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_rogue.webp; sourceTree = "<group>"; };
+		01A000000000000000000013 /* hero_shaman.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_shaman.webp; sourceTree = "<group>"; };
+		01A000000000000000000014 /* hero_warlock.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_warlock.webp; sourceTree = "<group>"; };
+		01A000000000000000000015 /* hero_warrior.webp */ = {isa = PBXFileReference; lastKnownFileType = image.webp; path = hero_warrior.webp; sourceTree = "<group>"; };
+		01A000000000000000000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		01A000000000000000000201 /* DeckBuilderForHS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DeckBuilderForHS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -68,8 +92,28 @@
 				01A000000000000000000006 /* Components.swift */,
 				01A000000000000000000007 /* Screens.swift */,
 				01A000000000000000000008 /* Localizable.strings */,
+				01A000000000000000000016 /* Assets.xcassets */,
+				01A000000000000000000502 /* Heroes */,
 			);
 			path = DeckBuilderForHS;
+			sourceTree = "<group>";
+		};
+		01A000000000000000000502 /* Heroes */ = {
+			isa = PBXGroup;
+			children = (
+				01A00000000000000000000B /* hero_deathknight.webp */,
+				01A00000000000000000000C /* hero_demonhunter.webp */,
+				01A00000000000000000000D /* hero_druid.webp */,
+				01A00000000000000000000E /* hero_hunter.webp */,
+				01A00000000000000000000F /* hero_mage.webp */,
+				01A000000000000000000010 /* hero_paladin.webp */,
+				01A000000000000000000011 /* hero_priest.webp */,
+				01A000000000000000000012 /* hero_rogue.webp */,
+				01A000000000000000000013 /* hero_shaman.webp */,
+				01A000000000000000000014 /* hero_warlock.webp */,
+				01A000000000000000000015 /* hero_warrior.webp */,
+			);
+			path = Heroes;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -149,6 +193,18 @@
 			buildActionMask = 2147483647;
 			files = (
 				01A000000000000000000108 /* Localizable.strings in Resources */,
+				01A000000000000000000109 /* hero_deathknight.webp in Resources */,
+				01A00000000000000000010A /* hero_demonhunter.webp in Resources */,
+				01A00000000000000000010B /* hero_druid.webp in Resources */,
+				01A00000000000000000010C /* hero_hunter.webp in Resources */,
+				01A00000000000000000010D /* hero_mage.webp in Resources */,
+				01A00000000000000000010E /* hero_paladin.webp in Resources */,
+				01A00000000000000000010F /* hero_priest.webp in Resources */,
+				01A000000000000000000110 /* hero_rogue.webp in Resources */,
+				01A000000000000000000111 /* hero_shaman.webp in Resources */,
+				01A000000000000000000112 /* hero_warlock.webp in Resources */,
+				01A000000000000000000113 /* hero_warrior.webp in Resources */,
+				01A000000000000000000114 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

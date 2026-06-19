@@ -7,14 +7,18 @@
 "Back" = "Back";
 "Build, last update check" = "Build, last update check";
 "Build" = "Build";
+"By" = "By";
 "By class" = "By class";
 "Cancel" = "Cancel";
+"Cached card and hero images will be downloaded again when needed." = "Cached card and hero images will be downloaded again when needed.";
 "Card data" = "Card data";
 "Card language" = "Card language";
 "Card limit (x2)" = "Card limit (x2)";
 "Cards loaded" = "Cards loaded";
 "Classic" = "Classic";
+"Clear" = "Clear";
 "Clear image cache" = "Clear image cache";
+"Clear image cache?" = "Clear image cache?";
 "Close" = "Close";
 "Collectible only" = "Collectible only";
 "Copy" = "Copy";
@@ -29,6 +33,7 @@
 "Deck code is empty." = "Deck code is empty.";
 "Deck code is not valid base64." = "Deck code is not valid base64.";
 "Deck code is truncated." = "Deck code is truncated.";
+"Deck code copied" = "Deck code copied";
 "Deck is full" = "Deck is full";
 "Deck must have a hero." = "Deck must have a hero.";
 "Deck name" = "Deck name";
@@ -47,6 +52,7 @@
 "French" = "French";
 "German" = "German";
 "Hunter" = "Hunter";
+"Image cache cleared" = "Image cache cleared";
 "Image failed to load" = "Image failed to load";
 "Import deck" = "Import deck";
 "Language" = "Language";

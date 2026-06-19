@@ -309,6 +309,20 @@ enum DefaultHeroes {
         guard let key = slug?.normalizedClassSlug else { return nil }
         return dbfIdByClass[key]
     }
+
+    static func imageName(cardId: String?, classSlug: String?) -> String? {
+        if let classSlug, let name = imageName(for: classSlug) {
+            return name
+        }
+        guard let cardId else { return nil }
+        guard let match = cardIdByClass.first(where: { $0.value == cardId }) else { return nil }
+        return imageName(for: match.key)
+    }
+
+    static func imageName(for slug: String?) -> String? {
+        guard let key = slug?.normalizedClassSlug, cardIdByClass[key] != nil else { return nil }
+        return "hero_\(key)"
+    }
 }
 
 enum L10n {
@@ -360,9 +374,13 @@ extension String {
     }
 
     func strippedCardText() -> String {
-        replacingOccurrences(of: "[x]", with: "")
-            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        replacingOccurrences(of: "[x]", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "\\s*(\\r?\\n|<\\s*br\\s*/?\\s*>)\\s*", with: " ", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: #"<(?!\s*/?\s*[bi]\s*>)[^>]*>"#, with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: #"<\s*/?\s*[bi]\s*>"#, with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "$", with: "")
+            .replacingOccurrences(of: "#", with: "")
+            .replacingOccurrences(of: " {2,}", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

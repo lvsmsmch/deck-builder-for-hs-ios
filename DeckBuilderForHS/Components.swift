@@ -44,7 +44,13 @@ struct HeroTile: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: [AppColor.classColor(classSlug), AppColor.surfaceContainer], startPoint: .topLeading, endPoint: .bottomTrailing)
-            if let cardId, let url = URL(string: "https://art.hearthstonejson.com/v1/512x/\(cardId).webp") {
+            if let imageName = DefaultHeroes.imageName(cardId: cardId, classSlug: classSlug),
+               let image = UIImage(named: imageName) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .scaleEffect(1.08)
+            } else if let cardId, let url = URL(string: "https://art.hearthstonejson.com/v1/512x/\(cardId).webp") {
                 AsyncImage(url: url) { phase in
                     if case .success(let image) = phase {
                         image
@@ -111,7 +117,7 @@ struct DeckCardRow: View {
                     Text(entry.card.name)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
-                        .foregroundStyle(AppColor.onSurface)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                 }
                 .frame(height: 36)
@@ -145,9 +151,16 @@ struct SearchField: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(AppColor.onSurfaceDim)
-            TextField(placeholder, text: $text)
-                .autocorrectionDisabled()
-                .foregroundStyle(AppColor.onSurface)
+            ZStack(alignment: .leading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .foregroundStyle(AppColor.onSurfaceDim)
+                        .lineLimit(1)
+                }
+                TextField("", text: $text)
+                    .autocorrectionDisabled()
+                    .foregroundStyle(AppColor.onSurface)
+            }
             if !text.isEmpty {
                 Button {
                     text = ""

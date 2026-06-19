@@ -7,14 +7,18 @@
 "Back" = "Назад";
 "Build, last update check" = "Билд, последняя проверка";
 "Build" = "Билд";
+"By" = "Автор:";
 "By class" = "По классу";
 "Cancel" = "Отмена";
+"Cached card and hero images will be downloaded again when needed." = "Кешированные изображения карт и героев будут загружены заново при необходимости.";
 "Card data" = "Данные карт";
 "Card language" = "Язык карт";
 "Card limit (x2)" = "Лимит карт (x2)";
 "Cards loaded" = "Карт загружено";
 "Classic" = "Классический";
+"Clear" = "Очистить";
 "Clear image cache" = "Очистить кеш изображений";
+"Clear image cache?" = "Очистить кеш изображений?";
 "Close" = "Закрыть";
 "Collectible only" = "Только доступные";
 "Copy" = "Копировать";
@@ -29,6 +33,7 @@
 "Deck code is empty." = "Код колоды пуст.";
 "Deck code is not valid base64." = "Код колоды не похож на base64.";
 "Deck code is truncated." = "Код колоды обрезан.";
+"Deck code copied" = "Код колоды скопирован";
 "Deck is full" = "Колода заполнена";
 "Deck must have a hero." = "В колоде должен быть герой.";
 "Deck name" = "Имя колоды";
@@ -47,6 +52,7 @@
 "French" = "Французский";
 "German" = "Немецкий";
 "Hunter" = "Охотник";
+"Image cache cleared" = "Кеш изображений очищен";
 "Image failed to load" = "Изображение не загрузилось";
 "Import deck" = "Импорт колоды";
 "Language" = "Язык";

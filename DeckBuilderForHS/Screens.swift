@@ -26,14 +26,17 @@ struct RootView: View {
 
     @ViewBuilder
     private var mainTabs: some View {
-        switch selectedTab {
-        case .library:
+        ZStack {
             NavigationStack { CardLibraryView() }
                 .accessibilityIdentifier("screen.library")
-        case .saved:
+                .opacity(selectedTab == .library ? 1 : 0)
+                .allowsHitTesting(selectedTab == .library)
+
             NavigationStack { SavedDecksView() }
                 .accessibilityIdentifier("screen.saved")
-        case .more:
+                .opacity(selectedTab == .saved ? 1 : 0)
+                .allowsHitTesting(selectedTab == .saved)
+
             NavigationStack(path: $morePath) {
                 MoreView()
                     .navigationDestination(for: MoreRoute.self) { route in
@@ -46,6 +49,8 @@ struct RootView: View {
                     }
             }
             .accessibilityIdentifier("screen.more")
+            .opacity(selectedTab == .more ? 1 : 0)
+            .allowsHitTesting(selectedTab == .more)
         }
     }
 
@@ -70,6 +75,9 @@ struct RootView: View {
         case .deckView:
             DebugDeckRoute { debugStandaloneScreen = nil }
                 .accessibilityIdentifier("screen.deck-view")
+        case .deckViewToast:
+            DebugDeckRoute(showsToast: true) { debugStandaloneScreen = nil }
+                .accessibilityIdentifier("screen.deck-view.toast")
         case .builder:
             DeckBuilderView(onClose: { debugStandaloneScreen = nil }) { _ in }
                 .accessibilityIdentifier("screen.builder")
@@ -79,9 +87,15 @@ struct RootView: View {
         case .builderEditorPool:
             DeckBuilderView(debugState: .editorPool, onClose: { debugStandaloneScreen = nil }) { _ in }
                 .accessibilityIdentifier("screen.builder.editor-pool")
+        case .builderEditorPoolFilled:
+            DeckBuilderView(debugState: .editorPoolFilled, onClose: { debugStandaloneScreen = nil }) { _ in }
+                .accessibilityIdentifier("screen.builder.editor-pool-filled")
         case .builderIncompleteDialog:
             DeckBuilderView(debugState: .incompleteDialog, onClose: { debugStandaloneScreen = nil }) { _ in }
                 .accessibilityIdentifier("screen.builder.incomplete-dialog")
+        case .settingsClearDialog:
+            NavigationStack { SettingsView(debugShowsClearDialog: true) }
+                .accessibilityIdentifier("screen.settings.clear-dialog")
         }
     }
 }
@@ -94,7 +108,8 @@ private enum DebugLaunch {
         case .more, .settings, .cardData:
             .more
         case .library, .libraryFilters, .cardDetail, .savedNewDialog, .savedImport, .savedRename, .deckView,
-             .builder, .builderEditorDeck, .builderEditorPool, .builderIncompleteDialog, nil:
+             .deckViewToast, .builder, .builderEditorDeck, .builderEditorPool, .builderEditorPoolFilled,
+             .builderIncompleteDialog, .settingsClearDialog, nil:
             .library
         }
     }
@@ -124,14 +139,20 @@ private enum DebugLaunch {
             .savedRename
         case .deckView:
             .deckView
+        case .deckViewToast:
+            .deckViewToast
         case .builder:
             .builder
         case .builderEditorDeck:
             .builderEditorDeck
         case .builderEditorPool:
             .builderEditorPool
+        case .builderEditorPoolFilled:
+            .builderEditorPoolFilled
         case .builderIncompleteDialog:
             .builderIncompleteDialog
+        case .settingsClearDialog:
+            .settingsClearDialog
         default:
             nil
         }
@@ -161,12 +182,15 @@ private enum DebugLaunchScreen: String {
     case savedImport = "saved-import"
     case savedRename = "saved-rename"
     case deckView = "deck-view"
+    case deckViewToast = "deck-view-toast"
     case more
     case settings
+    case settingsClearDialog = "settings-clear-dialog"
     case cardData = "card-data"
     case builder
     case builderEditorDeck = "builder-editor-deck"
     case builderEditorPool = "builder-editor-pool"
+    case builderEditorPoolFilled = "builder-editor-pool-filled"
     case builderIncompleteDialog = "builder-incomplete-dialog"
 }
 
@@ -177,10 +201,13 @@ private enum DebugStandaloneScreen {
     case savedImport
     case savedRename
     case deckView
+    case deckViewToast
     case builder
     case builderEditorDeck
     case builderEditorPool
+    case builderEditorPoolFilled
     case builderIncompleteDialog
+    case settingsClearDialog
 }
 
 private enum MoreRoute: Hashable {
@@ -320,6 +347,7 @@ private struct DebugCardDetailRoute: View {
 }
 
 private struct DebugDeckRoute: View {
+    var showsToast = false
     let onClose: () -> Void
 
     @EnvironmentObject private var app: AppModel
@@ -330,7 +358,7 @@ private struct DebugDeckRoute: View {
         NavigationStack {
             Group {
                 if let deck {
-                    DeckView(deck: deck, onClose: onClose)
+                    DeckView(deck: deck, onClose: onClose, debugShowsToast: showsToast)
                 } else if let error {
                     EmptyStateView(title: L10n.tr("Error"), bodyText: error, icon: "exclamationmark.triangle")
                 } else {
@@ -429,7 +457,11 @@ struct CardLibraryView: View {
             FilterSheet(filters: $filters)
                 .presentationDetents([.medium, .large])
         }
-        .task { await reload() }
+        .task {
+            if visibleCards.isEmpty {
+                await reload()
+            }
+        }
         .onChange(of: filters) { _, _ in Task { await reload() } }
     }
 
@@ -870,7 +902,6 @@ struct CardDetailView: View {
                             .font(.callout.italic())
                             .foregroundStyle(AppColor.onSurfaceDim)
                     }
-                    statsGrid
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -898,31 +929,8 @@ struct CardDetailView: View {
         let type = card.cardType.name.isEmpty ? "" : card.cardType.name
         let cls = card.classes.map { ClassLabels.label($0.slug) }.joined(separator: " / ")
         let set = card.cardSet?.name ?? ""
-        return [cls, type, set].filter { !$0.isEmpty }.joined(separator: " - ")
-    }
-
-    private var statsGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
-            stat("Mana", card.manaCost)
-            if let attack = card.attack { stat("Attack", attack) }
-            if let health = card.health { stat("Health", health) }
-            if let durability = card.durability { stat("Durability", durability) }
-            if let armor = card.armor { stat("Armor", armor) }
-        }
-        .padding(.top, 4)
-    }
-
-    private func stat(_ label: String, _ value: Int) -> some View {
-        VStack(spacing: 3) {
-            Text("\(value)")
-                .font(.headline.weight(.bold))
-            Text(L10n.tr(label))
-                .font(.caption)
-                .foregroundStyle(AppColor.onSurfaceDim)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .compactCard()
+        let artist = card.artistName.map { "\(L10n.tr("By")) \($0)" } ?? ""
+        return [cls, type, set, artist].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 
@@ -1058,6 +1066,7 @@ struct SavedDecksView: View {
                     },
                     onCancel: { showNewDeck = false }
                 )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
             if renameDeck != nil {
                 RenameDeckDialog(
@@ -1065,6 +1074,7 @@ struct SavedDecksView: View {
                     onSave: saveRename,
                     onCancel: { renameDeck = nil }
                 )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
             if let actionError {
                 DarkMessageDialog(
@@ -1074,8 +1084,12 @@ struct SavedDecksView: View {
                 ) {
                     self.actionError = nil
                 }
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
         }
+        .animation(.spring(response: 0.26, dampingFraction: 0.9), value: showNewDeck)
+        .animation(.spring(response: 0.26, dampingFraction: 0.9), value: renameDeck != nil)
+        .animation(.spring(response: 0.26, dampingFraction: 0.9), value: actionError)
     }
 
     private func saveRename() {
@@ -1254,6 +1268,23 @@ private struct DarkConfirmDialog: View {
     }
 }
 
+private struct ToastBanner: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(AppColor.onSurface)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .background(AppColor.surfaceContainerHighest)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(AppColor.outlineSoft, lineWidth: 1))
+            .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
+            .padding(.horizontal, 20)
+    }
+}
+
 private struct DialogActionButton: View {
     let title: String
     let systemImage: String
@@ -1401,13 +1432,18 @@ struct SavedDeckRow: View {
 }
 
 struct DeckView: View {
-    @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
     let deck: Deck
     var onClose: (() -> Void)?
 
     @State private var selectedCard: Card?
-    @State private var actionError: String?
+    @State private var toastMessage: String?
+
+    init(deck: Deck, onClose: (() -> Void)? = nil, debugShowsToast: Bool = false) {
+        self.deck = deck
+        self.onClose = onClose
+        _toastMessage = State(initialValue: debugShowsToast ? L10n.tr("Deck code copied") : nil)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1420,11 +1456,12 @@ struct DeckView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(ClassLabels.label(deck.heroClass?.slug))
                                 .font(.title.weight(.bold))
+                                .foregroundStyle(.white)
                             HStack {
                                 FormatChip(text: deck.format.displayName)
                                 Text("\(deck.cardCount)/\(deck.maxCardCount)")
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(AppColor.onSurfaceDim)
+                                    .foregroundStyle(.white.opacity(0.72))
                             }
                         }
                         .padding(18)
@@ -1442,22 +1479,9 @@ struct DeckView: View {
             HStack(spacing: 10) {
                 Button {
                     Clipboard.copy(deck.code)
+                    showToast(L10n.tr("Deck code copied"))
                 } label: {
-                    Label(L10n.tr("Copy"), systemImage: "doc.on.doc")
-                }
-                .buttonStyle(.bordered)
-                ShareLink(item: deck.code) {
-                    Label(L10n.tr("Share"), systemImage: "square.and.arrow.up")
-                }
-                .buttonStyle(.bordered)
-                Button {
-                    do {
-                        try app.save(deck: deck)
-                    } catch {
-                        actionError = error.localizedDescription
-                    }
-                } label: {
-                    Text(L10n.tr("Save"))
+                    Label(L10n.tr("Copy code"), systemImage: "doc.on.doc")
                 }
                 .buttonStyle(PrimaryButtonStyle())
             }
@@ -1473,16 +1497,14 @@ struct DeckView: View {
         }
         .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
         .overlay {
-            if let actionError {
-                DarkMessageDialog(
-                    title: L10n.tr("Error"),
-                    message: actionError,
-                    buttonTitle: L10n.tr("OK")
-                ) {
-                    self.actionError = nil
-                }
+            if let toastMessage {
+                ToastBanner(message: toastMessage)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 84)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.spring(response: 0.26, dampingFraction: 0.9), value: toastMessage)
         .appBackground()
     }
 
@@ -1491,6 +1513,16 @@ struct DeckView: View {
             onClose()
         } else {
             dismiss()
+        }
+    }
+
+    private func showToast(_ message: String) {
+        toastMessage = message
+        Task {
+            try? await Task.sleep(for: .seconds(1.7))
+            if toastMessage == message {
+                toastMessage = nil
+            }
         }
     }
 }
@@ -1508,6 +1540,7 @@ struct DeckBuilderView: View {
     @Environment(\.dismiss) private var dismiss
     let onClose: (() -> Void)?
     let onSaved: (Deck) -> Void
+    private let debugState: DeckBuilderDebugState?
 
     @State private var phaseClassPicker = true
     @State private var chosenClass: String?
@@ -1518,10 +1551,13 @@ struct DeckBuilderView: View {
     @State private var poolFilters = CardFilters(sort: CardSort(key: .manaCost, direction: .ascending))
     @State private var poolCards: [Card] = []
     @State private var poolTotal = 0
+    @State private var poolSearchRevision = 0
+    @State private var showPoolFilters = false
     @State private var activeTab = 0
     @State private var selectedCard: Card?
     @State private var alertMessage: String?
     @State private var confirmIncompleteSave = false
+    @State private var debugSeededDeck = false
 
     fileprivate init(
         debugState: DeckBuilderDebugState? = nil,
@@ -1530,11 +1566,12 @@ struct DeckBuilderView: View {
     ) {
         self.onClose = onClose
         self.onSaved = onSaved
-        let startsInEditor = debugState == .editorDeck || debugState == .editorPool || debugState == .incompleteDialog
+        self.debugState = debugState
+        let startsInEditor = debugState == .editorDeck || debugState == .editorPool || debugState == .editorPoolFilled || debugState == .incompleteDialog
         _phaseClassPicker = State(initialValue: !startsInEditor)
         _chosenClass = State(initialValue: startsInEditor ? "mage" : nil)
         _heroCardId = State(initialValue: startsInEditor ? DefaultHeroes.dbfId(for: "mage") : nil)
-        _activeTab = State(initialValue: debugState == .editorPool ? 1 : 0)
+        _activeTab = State(initialValue: debugState == .editorPool || debugState == .editorPoolFilled ? 1 : 0)
         _confirmIncompleteSave = State(initialValue: debugState == .incompleteDialog)
     }
 
@@ -1547,6 +1584,7 @@ struct DeckBuilderView: View {
                 if !phaseClassPicker, poolCards.isEmpty {
                     await reloadPool()
                 }
+                seedDebugDeckIfNeeded()
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1581,6 +1619,10 @@ struct DeckBuilderView: View {
                 }
             }
             .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
+            .sheet(isPresented: $showPoolFilters) {
+                FilterSheet(filters: $poolFilters)
+                    .presentationDetents([.medium, .large])
+            }
             .appBackground()
         }
     }
@@ -1684,17 +1726,45 @@ struct DeckBuilderView: View {
                     .foregroundStyle(AppColor.onSurfaceDim)
             }
             Spacer()
-            Menu(format.displayName) {
-                Button(GameFormat.standard.displayName) { format = .standard; Task { await reloadPool() } }
-                Button(GameFormat.wild.displayName) { format = .wild; Task { await reloadPool() } }
-            }
-            Toggle("x1", isOn: $singleton)
-                .labelsHidden()
-                .onChange(of: singleton) { _, enabled in
-                    if enabled {
-                        deck = deck.mapValues { DeckCardEntry(card: $0.card, count: 1) }
+            Menu {
+                ForEach(GameFormat.allCases.filter { $0 != .unknown }) { nextFormat in
+                    Button(nextFormat.displayName) {
+                        format = nextFormat
+                        Task { await reloadPool() }
                     }
                 }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(format.displayName)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.bold))
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppColor.primary)
+                .padding(.horizontal, 10)
+                .frame(height: 34)
+                .background(AppColor.primarySoft)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            Button {
+                singleton.toggle()
+                if singleton {
+                    deck = deck.mapValues { DeckCardEntry(card: $0.card, count: 1) }
+                }
+            } label: {
+                Text("*1")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(singleton ? AppColor.rarityColor("legendary") : AppColor.onSurfaceDim)
+                    .padding(.horizontal, 11)
+                    .frame(height: 34)
+                    .background(singleton ? AppColor.rarityColor("legendary").opacity(0.18) : AppColor.surfaceContainerHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(singleton ? AppColor.rarityColor("legendary") : AppColor.outlineSoft, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
         }
         .padding(16)
     }
@@ -1724,14 +1794,28 @@ struct DeckBuilderView: View {
     private var poolPane: some View {
         VStack(spacing: 0) {
             SearchField(text: $poolFilters.textQuery, placeholder: L10n.tr("Search pool"))
-            ManaChips(selected: poolFilters.manaCosts) { cost in
-                if poolFilters.manaCosts.contains(cost) { poolFilters.manaCosts.remove(cost) } else { poolFilters.manaCosts.insert(cost) }
-                Task { await reloadPool() }
-            }
+            builderPoolControls
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], spacing: 10) {
                     ForEach(poolCards) { card in
-                        CardThumbnail(card: card) { add(card) }
+                        let count = deck[card.id]?.count ?? 0
+                        ZStack(alignment: .topTrailing) {
+                            CardThumbnail(card: card) { add(card) }
+                            if count > 0 {
+                                Text("x\(count)")
+                                    .font(.headline.weight(.bold))
+                                    .foregroundStyle(AppColor.onPrimary)
+                                    .frame(width: 34, height: 30)
+                                    .background(AppColor.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(AppColor.onPrimary.opacity(0.7), lineWidth: 1))
+                                    .padding(7)
+                            }
+                        }
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(count > 0 ? AppColor.primary : Color.clear, lineWidth: 2)
+                        )
                             .contextMenu {
                                 Button(L10n.tr("Details")) { selectedCard = card }
                             }
@@ -1741,7 +1825,64 @@ struct DeckBuilderView: View {
                 .padding(.bottom, 16)
             }
         }
-        .onChange(of: poolFilters.textQuery) { _, _ in Task { await reloadPool() } }
+        .onChange(of: poolFilters) { _, _ in Task { await reloadPool() } }
+    }
+
+    private var builderPoolControls: some View {
+        HStack(spacing: 8) {
+            Text(L10n.cardsCount(poolTotal))
+                .font(.caption)
+                .foregroundStyle(AppColor.onSurfaceDim)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Menu {
+                Button(L10n.tr("Mana asc")) { poolFilters.sort = CardSort(key: .manaCost, direction: .ascending) }
+                Button(L10n.tr("Mana desc")) { poolFilters.sort = CardSort(key: .manaCost, direction: .descending) }
+                Button(L10n.tr("Name")) { poolFilters.sort = CardSort(key: .name, direction: .ascending) }
+                Button(L10n.tr("Newest")) { poolFilters.sort = CardSort(key: .dateAdded, direction: .ascending) }
+                Button(L10n.tr("Oldest")) { poolFilters.sort = CardSort(key: .dateAdded, direction: .descending) }
+            } label: {
+                Text(builderPoolSortLabel)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppColor.onSurface)
+                    .padding(.horizontal, 12)
+                    .frame(height: 38)
+                    .background(AppColor.surfaceContainer)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
+            }
+            Button { showPoolFilters = true } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(AppColor.onSurface)
+                        .frame(width: 42, height: 42)
+                    if poolFilters.activeFilterCount > 0 {
+                        Text("\(poolFilters.activeFilterCount)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(AppColor.onPrimary)
+                            .frame(width: 16, height: 16)
+                            .background(AppColor.primary)
+                            .clipShape(Circle())
+                            .offset(x: -3, y: 3)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+
+    private var builderPoolSortLabel: String {
+        switch (poolFilters.sort.key, poolFilters.sort.direction) {
+        case (.manaCost, .ascending): L10n.tr("Mana asc")
+        case (.manaCost, .descending): L10n.tr("Mana desc")
+        case (.name, _): L10n.tr("Name")
+        case (.dateAdded, .ascending): L10n.tr("Newest")
+        case (.dateAdded, .descending): L10n.tr("Oldest")
+        case (.groupByClass, _): L10n.tr("By class")
+        }
     }
 
     private var bottomActions: some View {
@@ -1772,11 +1913,13 @@ struct DeckBuilderView: View {
 
     private func reloadPool() async {
         guard let chosenClass else { return }
+        poolSearchRevision += 1
+        let revision = poolSearchRevision
         var filters = poolFilters
         filters.classes = [chosenClass, "neutral"]
         filters.collectibleOnly = true
-        filters.format = format == .standard ? .standard : .all
         let result = await app.searchCards(filters: filters, page: 1, pageSize: 90)
+        guard revision == poolSearchRevision else { return }
         poolCards = result.items.filter { !isDefaultHero($0) }
         poolTotal = result.totalCount
     }
@@ -1818,6 +1961,16 @@ struct DeckBuilderView: View {
         }
     }
 
+    private func seedDebugDeckIfNeeded() {
+        #if DEBUG
+        guard debugState == .editorPoolFilled, !debugSeededDeck else { return }
+        guard let card = poolCards.first(where: { $0.collectible && $0.cardType.slug != "hero" }) else { return }
+        let count = card.isLegendary || singleton ? 1 : 2
+        deck[card.id] = DeckCardEntry(card: card, count: count)
+        debugSeededDeck = true
+        #endif
+    }
+
     private func isDefaultHero(_ card: Card) -> Bool {
         card.cardType.slug == "hero" && (card.text?.isEmpty ?? true) && card.slug.hasPrefix("HERO_")
     }
@@ -1826,6 +1979,7 @@ struct DeckBuilderView: View {
 private enum DeckBuilderDebugState {
     case editorDeck
     case editorPool
+    case editorPoolFilled
     case incompleteDialog
 }
 
@@ -1904,6 +2058,12 @@ struct MoreHubRow: View {
 
 struct SettingsView: View {
     @EnvironmentObject private var app: AppModel
+    @State private var confirmClearImageCache = false
+    @State private var toastMessage: String?
+
+    fileprivate init(debugShowsClearDialog: Bool = false) {
+        _confirmClearImageCache = State(initialValue: debugShowsClearDialog)
+    }
 
     var body: some View {
         ScrollView {
@@ -1938,7 +2098,7 @@ struct SettingsView: View {
 
                 SettingsGroup(title: L10n.tr("Storage")) {
                     Button(role: .destructive) {
-                        app.clearImageCache()
+                        confirmClearImageCache = true
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "trash")
@@ -1968,6 +2128,41 @@ struct SettingsView: View {
         .navigationTitle(L10n.tr("Settings"))
         .appBackground()
         .accessibilityIdentifier("screen.settings")
+        .overlay {
+            if confirmClearImageCache {
+                DarkConfirmDialog(
+                    title: L10n.tr("Clear image cache?"),
+                    message: L10n.tr("Cached card and hero images will be downloaded again when needed."),
+                    confirmTitle: L10n.tr("Clear"),
+                    cancelTitle: L10n.tr("Cancel"),
+                    onConfirm: {
+                        confirmClearImageCache = false
+                        app.clearImageCache()
+                        showToast(L10n.tr("Image cache cleared"))
+                    },
+                    onCancel: { confirmClearImageCache = false }
+                )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+            if let toastMessage {
+                ToastBanner(message: toastMessage)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.26, dampingFraction: 0.9), value: confirmClearImageCache)
+        .animation(.spring(response: 0.26, dampingFraction: 0.9), value: toastMessage)
+    }
+
+    private func showToast(_ message: String) {
+        toastMessage = message
+        Task {
+            try? await Task.sleep(for: .seconds(1.7))
+            if toastMessage == message {
+                toastMessage = nil
+            }
+        }
     }
 }
 
