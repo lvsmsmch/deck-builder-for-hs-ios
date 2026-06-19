@@ -52,9 +52,36 @@ struct RootView: View {
     @ViewBuilder
     private func debugStandaloneView(_ screen: DebugStandaloneScreen) -> some View {
         switch screen {
+        case .libraryFilters:
+            DebugFilterSheetRoute()
+                .accessibilityIdentifier("screen.library.filters")
+        case .cardDetail:
+            DebugCardDetailRoute()
+                .accessibilityIdentifier("screen.card-detail")
+        case .savedNewDialog:
+            NavigationStack { SavedDecksView(debugState: .newDeckDialog) }
+                .accessibilityIdentifier("screen.saved.new-dialog")
+        case .savedImport:
+            NavigationStack { SavedDecksView(debugState: .importSheet) }
+                .accessibilityIdentifier("screen.saved.import")
+        case .savedRename:
+            NavigationStack { SavedDecksView(debugState: .renameAlert) }
+                .accessibilityIdentifier("screen.saved.rename")
+        case .deckView:
+            DebugDeckRoute()
+                .accessibilityIdentifier("screen.deck-view")
         case .builder:
             DeckBuilderView { _ in }
                 .accessibilityIdentifier("screen.builder")
+        case .builderEditorDeck:
+            DeckBuilderView(debugState: .editorDeck) { _ in }
+                .accessibilityIdentifier("screen.builder.editor-deck")
+        case .builderEditorPool:
+            DeckBuilderView(debugState: .editorPool) { _ in }
+                .accessibilityIdentifier("screen.builder.editor-pool")
+        case .builderIncompleteDialog:
+            DeckBuilderView(debugState: .incompleteDialog) { _ in }
+                .accessibilityIdentifier("screen.builder.incomplete-dialog")
         }
     }
 }
@@ -66,7 +93,8 @@ private enum DebugLaunch {
             .saved
         case .more, .settings, .cardData:
             .more
-        case .library, .builder, nil:
+        case .library, .libraryFilters, .cardDetail, .savedNewDialog, .savedImport, .savedRename, .deckView,
+             .builder, .builderEditorDeck, .builderEditorPool, .builderIncompleteDialog, nil:
             .library
         }
     }
@@ -84,8 +112,26 @@ private enum DebugLaunch {
 
     static var initialStandaloneScreen: DebugStandaloneScreen? {
         switch screen {
+        case .libraryFilters:
+            .libraryFilters
+        case .cardDetail:
+            .cardDetail
+        case .savedNewDialog:
+            .savedNewDialog
+        case .savedImport:
+            .savedImport
+        case .savedRename:
+            .savedRename
+        case .deckView:
+            .deckView
         case .builder:
             .builder
+        case .builderEditorDeck:
+            .builderEditorDeck
+        case .builderEditorPool:
+            .builderEditorPool
+        case .builderIncompleteDialog:
+            .builderIncompleteDialog
         default:
             nil
         }
@@ -108,15 +154,33 @@ private enum DebugLaunch {
 
 private enum DebugLaunchScreen: String {
     case library
+    case libraryFilters = "library-filters"
+    case cardDetail = "card-detail"
     case saved
+    case savedNewDialog = "saved-new-dialog"
+    case savedImport = "saved-import"
+    case savedRename = "saved-rename"
+    case deckView = "deck-view"
     case more
     case settings
     case cardData = "card-data"
     case builder
+    case builderEditorDeck = "builder-editor-deck"
+    case builderEditorPool = "builder-editor-pool"
+    case builderIncompleteDialog = "builder-incomplete-dialog"
 }
 
 private enum DebugStandaloneScreen {
+    case libraryFilters
+    case cardDetail
+    case savedNewDialog
+    case savedImport
+    case savedRename
+    case deckView
     case builder
+    case builderEditorDeck
+    case builderEditorPool
+    case builderIncompleteDialog
 }
 
 private enum MoreRoute: Hashable {
@@ -196,6 +260,101 @@ private extension AppTab {
             "saved"
         case .more:
             "more"
+        }
+    }
+}
+
+private struct DebugFilterSheetRoute: View {
+    @State private var filters = CardFilters(
+        format: .standard,
+        rarities: ["legendary"],
+        types: ["minion"],
+        manaCosts: [3, 7],
+        collectibleOnly: false,
+        textQuery: "dragon"
+    )
+
+    var body: some View {
+        FilterSheet(filters: $filters)
+            .appBackground()
+    }
+}
+
+private struct DebugCardDetailRoute: View {
+    @EnvironmentObject private var app: AppModel
+    @State private var card: Card?
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let card {
+                    CardDetailView(card: card)
+                } else if let error {
+                    EmptyStateView(title: L10n.tr("Error"), bodyText: error, icon: "exclamationmark.triangle")
+                } else {
+                    ProgressView(L10n.tr("Loading cards..."))
+                        .tint(AppColor.primary)
+                }
+            }
+            .appBackground()
+        }
+        .task { await loadCard() }
+    }
+
+    @MainActor
+    private func loadCard() async {
+        guard card == nil, error == nil else { return }
+        await app.loadCardsIfNeeded()
+        let preferred = ["EX1_116", "CS2_029", "CORE_EX1_116"]
+        card = preferred.lazy.compactMap { app.card(idOrSlug: $0) }.first ??
+            app.cards.first { $0.collectible && !$0.isHiddenFromLibrary }
+        if card == nil {
+            error = L10n.tr("No cards loaded yet.")
+        }
+    }
+}
+
+private struct DebugDeckRoute: View {
+    @EnvironmentObject private var app: AppModel
+    @State private var deck: Deck?
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let deck {
+                    DeckView(deck: deck)
+                } else if let error {
+                    EmptyStateView(title: L10n.tr("Error"), bodyText: error, icon: "exclamationmark.triangle")
+                } else {
+                    ProgressView(L10n.tr("Loading cards..."))
+                        .tint(AppColor.primary)
+                }
+            }
+            .appBackground()
+        }
+        .task { await loadDeck() }
+    }
+
+    @MainActor
+    private func loadDeck() async {
+        guard deck == nil, error == nil else { return }
+        await app.loadCardsIfNeeded()
+        var filters = CardFilters()
+        filters.classes = ["mage", "neutral"]
+        filters.collectibleOnly = true
+        filters.format = .all
+        let page = await app.searchCards(filters: filters, page: 1, pageSize: 40)
+        let ids = Array(page.items.filter { !$0.isHiddenFromLibrary && $0.cardType.slug != "hero" }.prefix(30).map(\.id))
+        guard let heroCardId = DefaultHeroes.dbfId(for: "mage"), !ids.isEmpty else {
+            error = L10n.tr("No cards loaded yet.")
+            return
+        }
+        do {
+            deck = try app.assembleDeck(ids: ids, heroCardId: heroCardId, format: .wild)
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }
@@ -373,45 +532,86 @@ struct FilterSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section(L10n.tr("Format")) {
-                    Picker("", selection: $filters.format) {
-                        ForEach(CardFormatFilter.allCases) { format in
-                            Text(format.label).tag(format)
+        VStack(spacing: 0) {
+            HStack {
+                Button(L10n.tr("Reset all")) { filters = CardFilters(textQuery: filters.textQuery) }
+                    .buttonStyle(FilterHeaderButtonStyle())
+                Spacer()
+                Button(L10n.tr("Apply")) { dismiss() }
+                    .buttonStyle(FilterHeaderButtonStyle(isProminent: true))
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 8)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text(L10n.tr("Filters"))
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundStyle(AppColor.onSurface)
+                        .padding(.bottom, 6)
+
+                    SettingsGroup(title: L10n.tr("Format")) {
+                        HStack(spacing: 8) {
+                            ForEach(CardFormatFilter.allCases) { format in
+                                formatButton(format)
+                            }
+                        }
+                        .padding(8)
+                    }
+
+                    SettingsGroup(title: L10n.tr("Rarity")) {
+                        multiRow("Common", "common", selection: $filters.rarities)
+                        SettingsDivider()
+                        multiRow("Rare", "rare", selection: $filters.rarities)
+                        SettingsDivider()
+                        multiRow("Epic", "epic", selection: $filters.rarities)
+                        SettingsDivider()
+                        multiRow("Legendary", "legendary", selection: $filters.rarities)
+                    }
+
+                    SettingsGroup(title: L10n.tr("Type")) {
+                        multiRow("Minion", "minion", selection: $filters.types)
+                        SettingsDivider()
+                        multiRow("Spell", "spell", selection: $filters.types)
+                        SettingsDivider()
+                        multiRow("Weapon", "weapon", selection: $filters.types)
+                        SettingsDivider()
+                        multiRow("Hero", "hero", selection: $filters.types)
+                        SettingsDivider()
+                        multiRow("Location", "location", selection: $filters.types)
+                    }
+
+                    SettingsGroup(title: L10n.tr("Options")) {
+                        SettingsRow(title: L10n.tr("Collectible only")) {
+                            Toggle("", isOn: $filters.collectibleOnly)
+                                .labelsHidden()
+                                .tint(AppColor.primary)
                         }
                     }
-                    .pickerStyle(.segmented)
                 }
-                Section(L10n.tr("Rarity")) {
-                    multiRow("Common", "common", selection: $filters.rarities)
-                    multiRow("Rare", "rare", selection: $filters.rarities)
-                    multiRow("Epic", "epic", selection: $filters.rarities)
-                    multiRow("Legendary", "legendary", selection: $filters.rarities)
-                }
-                Section(L10n.tr("Type")) {
-                    multiRow("Minion", "minion", selection: $filters.types)
-                    multiRow("Spell", "spell", selection: $filters.types)
-                    multiRow("Weapon", "weapon", selection: $filters.types)
-                    multiRow("Hero", "hero", selection: $filters.types)
-                    multiRow("Location", "location", selection: $filters.types)
-                }
-                Section {
-                    Toggle(L10n.tr("Collectible only"), isOn: $filters.collectibleOnly)
-                }
+                .padding(20)
             }
-            .scrollContentBackground(.hidden)
-            .background(AppColor.surface)
-            .navigationTitle(L10n.tr("Filters"))
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.tr("Reset all")) { filters = CardFilters(textQuery: filters.textQuery) }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.tr("Apply")) { dismiss() }
-                }
-            }
+            .appBackground()
         }
+        .appBackground()
+    }
+
+    private func formatButton(_ format: CardFormatFilter) -> some View {
+        let isSelected = filters.format == format
+
+        return Button {
+            filters.format = format
+        } label: {
+            Text(format.label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isSelected ? AppColor.onPrimary : AppColor.onSurfaceDim)
+                .frame(maxWidth: .infinity)
+                .frame(height: 38)
+                .background(isSelected ? AppColor.primary : AppColor.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private func multiRow(_ label: String, _ value: String, selection: Binding<Set<String>>) -> some View {
@@ -424,13 +624,35 @@ struct FilterSheet: View {
         } label: {
             HStack {
                 Text(L10n.tr(label))
+                    .font(.body)
                 Spacer()
                 if selection.wrappedValue.contains(value) {
                     Image(systemName: "checkmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(AppColor.primary)
                 }
             }
+            .padding(14)
+            .frame(minHeight: 54)
         }
         .foregroundStyle(AppColor.onSurface)
+        .buttonStyle(.plain)
+    }
+}
+
+private struct FilterHeaderButtonStyle: ButtonStyle {
+    var isProminent = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(isProminent ? AppColor.onPrimary : AppColor.onSurface)
+            .padding(.horizontal, 16)
+            .frame(height: 42)
+            .background(isProminent ? AppColor.primary : AppColor.surfaceContainerHigh)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(AppColor.outlineSoft, lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.75 : 1)
     }
 }
 
@@ -559,6 +781,13 @@ struct SavedDecksView: View {
     @State private var renameDeck: DeckPreview?
     @State private var renameText = ""
 
+    fileprivate init(debugState: SavedDecksDebugState? = nil) {
+        _showNewDeck = State(initialValue: debugState == .newDeckDialog)
+        _showImport = State(initialValue: debugState == .importSheet)
+        _renameDeck = State(initialValue: debugState == .renameAlert ? DeckPreview.debugSample : nil)
+        _renameText = State(initialValue: debugState == .renameAlert ? DeckPreview.debugSample.name : "")
+    }
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 0) {
@@ -657,14 +886,28 @@ struct SavedDecksView: View {
 
     private var importSheet: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text(L10n.tr("Import deck"))
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(AppColor.onSurface)
+                    Spacer()
+                    Button(L10n.tr("Close")) { showImport = false }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColor.primary)
+                }
                 Text(L10n.tr("Paste a Hearthstone deck code. Tap Decode to view and save it."))
                     .font(.subheadline)
                     .foregroundStyle(AppColor.onSurfaceDim)
                 TextEditor(text: $importCode)
+                    .scrollContentBackground(.hidden)
+                    .foregroundStyle(AppColor.onSurface)
+                    .tint(AppColor.primary)
                     .frame(minHeight: 150)
-                    .padding(8)
-                    .compactCard()
+                    .padding(10)
+                    .background(AppColor.surfaceContainer)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
                 if let importError {
                     Text(importError)
                         .foregroundStyle(AppColor.error)
@@ -688,11 +931,31 @@ struct SavedDecksView: View {
                 Spacer()
             }
             .padding(20)
-            .navigationTitle(L10n.tr("Import deck"))
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("Close")) { showImport = false } } }
             .appBackground()
         }
     }
+}
+
+private enum SavedDecksDebugState {
+    case newDeckDialog
+    case importSheet
+    case renameAlert
+}
+
+private extension DeckPreview {
+    static let debugSample = DeckPreview(
+        code: "AAEBAf0EAA==",
+        name: "Debug Mage deck",
+        classSlug: "mage",
+        className: ClassLabels.label("mage"),
+        heroCardId: DefaultHeroes.dbfId(for: "mage") ?? 637,
+        heroSlug: DefaultHeroes.cardId(for: "mage"),
+        format: .wild,
+        cardCount: 12,
+        maxCardCount: 30,
+        savedAt: Date(),
+        cardIds: []
+    )
 }
 
 struct SavedDeckRow: View {
@@ -849,10 +1112,25 @@ struct DeckBuilderView: View {
     @State private var alertMessage: String?
     @State private var confirmIncompleteSave = false
 
+    fileprivate init(debugState: DeckBuilderDebugState? = nil, onSaved: @escaping (Deck) -> Void) {
+        self.onSaved = onSaved
+        let startsInEditor = debugState == .editorDeck || debugState == .editorPool || debugState == .incompleteDialog
+        _phaseClassPicker = State(initialValue: !startsInEditor)
+        _chosenClass = State(initialValue: startsInEditor ? "mage" : nil)
+        _heroCardId = State(initialValue: startsInEditor ? DefaultHeroes.dbfId(for: "mage") : nil)
+        _activeTab = State(initialValue: debugState == .editorPool ? 1 : 0)
+        _confirmIncompleteSave = State(initialValue: debugState == .incompleteDialog)
+    }
+
     var body: some View {
         NavigationStack {
             Group {
                 if phaseClassPicker { classPicker } else { editor }
+            }
+            .task {
+                if !phaseClassPicker, poolCards.isEmpty {
+                    await reloadPool()
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -917,17 +1195,42 @@ struct DeckBuilderView: View {
     private var editor: some View {
         VStack(spacing: 0) {
             builderHeader
-            Picker("", selection: $activeTab) {
-                Text(L10n.tr("Deck")).tag(0)
-                Text(L10n.tr("Pool")).tag(1)
-            }
-            .pickerStyle(.segmented)
+            builderTabSelector
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
 
             if activeTab == 0 { deckPane } else { poolPane }
             bottomActions
         }
+    }
+
+    private var builderTabSelector: some View {
+        HStack(spacing: 6) {
+            builderTabButton(title: L10n.tr("Deck"), tab: 0)
+            builderTabButton(title: L10n.tr("Pool"), tab: 1)
+        }
+        .padding(6)
+        .frame(height: 48)
+        .background(AppColor.surfaceContainer)
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(AppColor.outlineSoft, lineWidth: 1))
+    }
+
+    private func builderTabButton(title: String, tab: Int) -> some View {
+        let isSelected = activeTab == tab
+
+        return Button {
+            activeTab = tab
+        } label: {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isSelected ? AppColor.onPrimary : AppColor.onSurfaceDim)
+                .frame(maxWidth: .infinity)
+                .frame(height: 36)
+                .background(isSelected ? AppColor.primary : Color.clear)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var builderHeader: some View {
@@ -1017,7 +1320,6 @@ struct DeckBuilderView: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(cardCount == 0)
-            .opacity(cardCount == 0 ? 0.45 : 1)
         }
         .padding(12)
         .background(AppColor.surfaceContainer)
@@ -1081,6 +1383,12 @@ struct DeckBuilderView: View {
     private func isDefaultHero(_ card: Card) -> Bool {
         card.cardType.slug == "hero" && (card.text?.isEmpty ?? true) && card.slug.hasPrefix("HERO_")
     }
+}
+
+private enum DeckBuilderDebugState {
+    case editorDeck
+    case editorPool
+    case incompleteDialog
 }
 
 struct MoreView: View {

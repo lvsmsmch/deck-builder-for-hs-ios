@@ -269,13 +269,15 @@ struct EmptyStateView: View {
 }
 
 struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(AppColor.onPrimary)
+            .foregroundStyle(isEnabled ? AppColor.onPrimary : AppColor.onSurfaceDimmer)
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .background(AppColor.primary.opacity(configuration.isPressed ? 0.78 : 1))
+            .background(isEnabled ? AppColor.primary.opacity(configuration.isPressed ? 0.78 : 1) : AppColor.surfaceContainerHighest)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
