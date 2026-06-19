@@ -4,24 +4,124 @@ import UIKit
 #endif
 
 struct RootView: View {
-    @State private var selectedTab: AppTab = .library
+    @State private var selectedTab: AppTab = DebugLaunch.initialTab
+    @State private var morePath: [MoreRoute] = DebugLaunch.initialMorePath
+    @State private var debugStandaloneScreen: DebugStandaloneScreen? = DebugLaunch.initialStandaloneScreen
 
     var body: some View {
         ZStack {
-            switch selectedTab {
-            case .library:
-                NavigationStack { CardLibraryView() }
-            case .saved:
-                NavigationStack { SavedDecksView() }
-            case .more:
-                NavigationStack { MoreView() }
+            if let debugStandaloneScreen {
+                debugStandaloneView(debugStandaloneScreen)
+            } else {
+                mainTabs
             }
         }
         .appBackground()
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            AppBottomBar(selectedTab: $selectedTab)
+            if debugStandaloneScreen == nil {
+                AppBottomBar(selectedTab: $selectedTab)
+            }
         }
     }
+
+    @ViewBuilder
+    private var mainTabs: some View {
+        switch selectedTab {
+        case .library:
+            NavigationStack { CardLibraryView() }
+                .accessibilityIdentifier("screen.library")
+        case .saved:
+            NavigationStack { SavedDecksView() }
+                .accessibilityIdentifier("screen.saved")
+        case .more:
+            NavigationStack(path: $morePath) {
+                MoreView()
+                    .navigationDestination(for: MoreRoute.self) { route in
+                        switch route {
+                        case .settings:
+                            SettingsView()
+                        case .cardData:
+                            CardDataView()
+                        }
+                    }
+            }
+            .accessibilityIdentifier("screen.more")
+        }
+    }
+
+    @ViewBuilder
+    private func debugStandaloneView(_ screen: DebugStandaloneScreen) -> some View {
+        switch screen {
+        case .builder:
+            DeckBuilderView { _ in }
+                .accessibilityIdentifier("screen.builder")
+        }
+    }
+}
+
+private enum DebugLaunch {
+    static var initialTab: AppTab {
+        switch screen {
+        case .saved:
+            .saved
+        case .more, .settings, .cardData:
+            .more
+        case .library, .builder, nil:
+            .library
+        }
+    }
+
+    static var initialMorePath: [MoreRoute] {
+        switch screen {
+        case .settings:
+            [.settings]
+        case .cardData:
+            [.cardData]
+        default:
+            []
+        }
+    }
+
+    static var initialStandaloneScreen: DebugStandaloneScreen? {
+        switch screen {
+        case .builder:
+            .builder
+        default:
+            nil
+        }
+    }
+
+    private static var screen: DebugLaunchScreen? {
+        #if DEBUG
+        let args = CommandLine.arguments
+        if let index = args.firstIndex(where: { $0 == "--debug-screen" || $0 == "-debug-screen" }),
+           args.indices.contains(index + 1) {
+            return DebugLaunchScreen(rawValue: args[index + 1])
+        }
+        if let value = ProcessInfo.processInfo.environment["DB_DEBUG_SCREEN"] {
+            return DebugLaunchScreen(rawValue: value)
+        }
+        #endif
+        return nil
+    }
+}
+
+private enum DebugLaunchScreen: String {
+    case library
+    case saved
+    case more
+    case settings
+    case cardData = "card-data"
+    case builder
+}
+
+private enum DebugStandaloneScreen {
+    case builder
+}
+
+private enum MoreRoute: Hashable {
+    case settings
+    case cardData
 }
 
 private enum AppTab: CaseIterable {
@@ -73,6 +173,7 @@ private struct AppBottomBar: View {
                     .frame(maxWidth: .infinity, minHeight: 64)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("tab.\(tab.accessibilityID)")
             }
         }
         .padding(.horizontal, 8)
@@ -82,6 +183,19 @@ private struct AppBottomBar: View {
             Rectangle()
                 .fill(AppColor.outlineSoft)
                 .frame(height: 1)
+        }
+    }
+}
+
+private extension AppTab {
+    var accessibilityID: String {
+        switch self {
+        case .library:
+            "library"
+        case .saved:
+            "saved"
+        case .more:
+            "more"
         }
     }
 }
@@ -980,9 +1094,7 @@ struct MoreView: View {
                 .padding(.bottom, 8)
 
             VStack(spacing: 10) {
-                NavigationLink {
-                    SettingsView()
-                } label: {
+                NavigationLink(value: MoreRoute.settings) {
                     MoreHubRow(
                         icon: "gearshape",
                         title: L10n.tr("Settings"),
@@ -990,10 +1102,9 @@ struct MoreView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("more.settings")
 
-                NavigationLink {
-                    CardDataView()
-                } label: {
+                NavigationLink(value: MoreRoute.cardData) {
                     MoreHubRow(
                         icon: "curlybraces",
                         title: L10n.tr("Card data"),
@@ -1001,12 +1112,14 @@ struct MoreView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("more.card-data")
             }
             .padding(.horizontal, 16)
 
             Spacer()
         }
         .appBackground()
+        .accessibilityIdentifier("screen.more.root")
     }
 }
 
@@ -1047,35 +1160,68 @@ struct SettingsView: View {
     @EnvironmentObject private var app: AppModel
 
     var body: some View {
-        Form {
-            Section(L10n.tr("Appearance")) {
-                Picker(L10n.tr("Theme"), selection: Binding(get: { app.preferences.theme }, set: app.setTheme)) {
-                    ForEach(ThemeMode.allCases) { theme in Text(theme.label).tag(theme) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                SettingsGroup(title: L10n.tr("Appearance")) {
+                    SettingsRow(title: L10n.tr("Theme")) {
+                        Picker(L10n.tr("Theme"), selection: Binding(get: { app.preferences.theme }, set: app.setTheme)) {
+                            ForEach(ThemeMode.allCases) { theme in Text(theme.label).tag(theme) }
+                        }
+                        .labelsHidden()
+                        .tint(AppColor.primary)
+                    }
+                }
+
+                SettingsGroup(title: L10n.tr("Language")) {
+                    SettingsRow(title: L10n.tr("Card language")) {
+                        Picker(L10n.tr("Card language"), selection: Binding(get: { app.preferences.cardLocale }, set: app.setCardLocale)) {
+                            ForEach(CardLocale.allCases) { locale in Text(locale.label).tag(locale.rawValue) }
+                        }
+                        .labelsHidden()
+                        .tint(AppColor.primary)
+                    }
+                }
+
+                SettingsGroup(title: L10n.tr("Privacy")) {
+                    SettingsRow(title: L10n.tr("Send error reports")) {
+                        Toggle("", isOn: Binding(get: { app.preferences.crashReportingEnabled }, set: app.setCrashReporting))
+                            .labelsHidden()
+                            .tint(AppColor.primary)
+                    }
+                }
+
+                SettingsGroup(title: L10n.tr("Storage")) {
+                    Button(role: .destructive) {
+                        app.clearImageCache()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "trash")
+                            Text(L10n.tr("Clear image cache"))
+                            Spacer()
+                        }
+                        .font(.body)
+                        .foregroundStyle(AppColor.error)
+                        .padding(14)
+                    }
+                }
+
+                SettingsGroup(title: L10n.tr("About")) {
+                    SettingsInfoRow(title: L10n.tr("Version"), value: "1.0")
+                    SettingsDivider()
+                    Link("iamajavagod@gmail.com", destination: URL(string: "mailto:iamajavagod@gmail.com")!)
+                        .font(.body)
+                        .foregroundStyle(AppColor.primary)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            Section(L10n.tr("Language")) {
-                Picker(L10n.tr("Card language"), selection: Binding(get: { app.preferences.cardLocale }, set: app.setCardLocale)) {
-                    ForEach(CardLocale.allCases) { locale in Text(locale.label).tag(locale.rawValue) }
-                }
-            }
-            Section(L10n.tr("Privacy")) {
-                Toggle(L10n.tr("Send error reports"), isOn: Binding(get: { app.preferences.crashReportingEnabled }, set: app.setCrashReporting))
-            }
-            Section(L10n.tr("Storage")) {
-                Button(role: .destructive) {
-                    app.clearImageCache()
-                } label: {
-                    Label(L10n.tr("Clear image cache"), systemImage: "trash")
-                }
-            }
-            Section(L10n.tr("About")) {
-                LabeledContent(L10n.tr("Version"), value: "1.0")
-                Link("iamajavagod@gmail.com", destination: URL(string: "mailto:iamajavagod@gmail.com")!)
-            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
         .navigationTitle(L10n.tr("Settings"))
-        .scrollContentBackground(.hidden)
         .appBackground()
+        .accessibilityIdentifier("screen.settings")
     }
 }
 
@@ -1083,37 +1229,129 @@ struct CardDataView: View {
     @EnvironmentObject private var app: AppModel
 
     var body: some View {
-        List {
-            Section(L10n.tr("Card data")) {
-                LabeledContent(L10n.tr("Cards loaded"), value: "\(app.cards.count)")
-                LabeledContent(L10n.tr("Locale"), value: app.preferences.cardLocale)
-                LabeledContent(L10n.tr("Build"), value: app.cardCacheInfo?.build ?? "-")
-                LabeledContent(L10n.tr("Downloaded"), value: formatted(app.cardCacheInfo?.fetchedAt))
-                LabeledContent(L10n.tr("Last update check"), value: formatted(app.cardCacheInfo?.lastCheckedAt))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                SettingsGroup(title: L10n.tr("Card data")) {
+                    SettingsInfoRow(title: L10n.tr("Cards loaded"), value: "\(app.cards.count)")
+                    SettingsDivider()
+                    SettingsInfoRow(title: L10n.tr("Locale"), value: app.preferences.cardLocale)
+                    SettingsDivider()
+                    SettingsInfoRow(title: L10n.tr("Build"), value: app.cardCacheInfo?.build ?? "-")
+                    SettingsDivider()
+                    SettingsInfoRow(title: L10n.tr("Downloaded"), value: formatted(app.cardCacheInfo?.fetchedAt))
+                    SettingsDivider()
+                    SettingsInfoRow(title: L10n.tr("Last update check"), value: formatted(app.cardCacheInfo?.lastCheckedAt))
+                    SettingsDivider()
+                    Button {
+                        app.refreshCards()
+                    } label: {
+                        HStack(spacing: 12) {
+                            if app.isLoadingCards {
+                                ProgressView()
+                                    .tint(AppColor.primary)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            Text(L10n.tr("Refresh card data"))
+                            Spacer()
+                        }
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(AppColor.primary)
+                        .padding(14)
+                    }
+                    .disabled(app.isLoadingCards)
+                }
+
                 if let error = app.cardLoadError {
-                    Text(error).foregroundStyle(AppColor.error)
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(AppColor.error)
+                        .padding(.horizontal, 4)
                 }
                 if let error = app.rotationLoadError {
-                    Text(error).foregroundStyle(AppColor.error)
-                }
-                Button {
-                    app.refreshCards()
-                } label: {
-                    if app.isLoadingCards {
-                        ProgressView()
-                    } else {
-                        Label(L10n.tr("Refresh card data"), systemImage: "arrow.clockwise")
-                    }
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(AppColor.error)
+                        .padding(.horizontal, 4)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
         .navigationTitle(L10n.tr("Card data"))
-        .scrollContentBackground(.hidden)
         .appBackground()
+        .accessibilityIdentifier("screen.card-data")
     }
 
     private func formatted(_ date: Date?) -> String {
         guard let date else { return "-" }
         return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
+    }
+}
+
+private struct SettingsGroup<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(AppColor.onSurface)
+                .padding(.horizontal, 4)
+            VStack(spacing: 0) {
+                content
+            }
+            .background(AppColor.surfaceContainer)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
+        }
+    }
+}
+
+private struct SettingsRow<Trailing: View>: View {
+    let title: String
+    @ViewBuilder let trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.body)
+                .foregroundStyle(AppColor.onSurface)
+            Spacer()
+            trailing
+        }
+        .padding(14)
+        .frame(minHeight: 54)
+    }
+}
+
+private struct SettingsInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(.body)
+                .foregroundStyle(AppColor.onSurface)
+            Spacer()
+            Text(value)
+                .font(.body)
+                .foregroundStyle(AppColor.onSurfaceDim)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(14)
+        .frame(minHeight: 54)
+    }
+}
+
+private struct SettingsDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(AppColor.outlineSoft)
+            .frame(height: 1)
+            .padding(.leading, 14)
     }
 }
