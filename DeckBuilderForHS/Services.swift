@@ -316,6 +316,7 @@ extension HsJsonCardDTO {
             ClassMeta(id: 0, slug: token.domainSlug.normalizedClassSlug, name: token.displayToken, heroCardId: nil)
         }
         let raceTokens = (races ?? race.map { [$0] } ?? [])
+        let minionTypes = raceTokens.map { MinionType(id: 0, slug: $0.domainSlug, name: $0.displayToken) }
         let mechanics = ((mechanics ?? []) + (referencedTags ?? []))
             .filter { !["TRIGGER_VISUAL", "TAG_ONE_TURN_EFFECT"].contains($0) }
         let textValue = text?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -341,7 +342,8 @@ extension HsJsonCardDTO {
             cardSet: cardSetSlug.map { Expansion(id: 0, slug: $0, name: set?.displayToken ?? $0, type: nil) },
             rarity: raritySlug.map { Rarity(id: 0, slug: $0, name: rarity?.displayToken ?? $0, craftingCost: Self.craftingCost(for: $0)) },
             cardType: CardType(id: 0, slug: type?.domainSlug ?? "unknown", name: type?.displayToken ?? ""),
-            minionType: raceTokens.first.map { MinionType(id: 0, slug: $0.domainSlug, name: $0.displayToken) },
+            minionType: minionTypes.first,
+            minionTypes: minionTypes,
             spellSchool: spellSchool.map { SpellSchool(id: 0, slug: $0.domainSlug, name: $0.displayToken) },
             keywords: Array(Set(mechanics)).sorted().map { Keyword(id: 0, slug: $0.domainSlug, name: $0.displayToken, refText: "") },
             collectible: collectible ?? false,

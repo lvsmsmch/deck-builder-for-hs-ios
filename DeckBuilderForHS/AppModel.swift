@@ -10,6 +10,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var cardLoadError: String?
     @Published private(set) var cardCacheInfo: CardCacheInfo?
     @Published private(set) var rotationLoadError: String?
+    @Published private(set) var imageCacheVersion = 0
     @Published var savedDecks: [DeckPreview] = []
 
     private let hsJson = HsJsonService()
@@ -164,6 +165,8 @@ final class AppModel: ObservableObject {
 
     func clearImageCache() {
         URLCache.shared.removeAllCachedResponses()
+        URLCache.shared.removeCachedResponses(since: .distantPast)
+        imageCacheVersion += 1
     }
 
     private func installCards(_ loaded: [Card]) {
@@ -200,7 +203,7 @@ final class AppModel: ObservableObject {
             if !filters.sets.isEmpty, !(card.cardSet.map { filters.sets.contains($0.slug) } ?? false) { return false }
             if !filters.rarities.isEmpty, !(card.rarity.map { filters.rarities.contains($0.slug) } ?? false) { return false }
             if !filters.types.isEmpty, !filters.types.contains(card.cardType.slug) { return false }
-            if !filters.minionTypes.isEmpty, !(card.minionType.map { filters.minionTypes.contains($0.slug) } ?? false) { return false }
+            if !filters.minionTypes.isEmpty, Set(card.minionTypes.map(\.slug)).isDisjoint(with: filters.minionTypes) { return false }
             if !filters.spellSchools.isEmpty, !(card.spellSchool.map { filters.spellSchools.contains($0.slug) } ?? false) { return false }
             if !filters.keywords.isEmpty, Set(card.keywords.map(\.slug)).isDisjoint(with: filters.keywords) { return false }
             if !expandedMana.isEmpty, !expandedMana.contains(card.manaCost) { return false }

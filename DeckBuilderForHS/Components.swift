@@ -4,6 +4,8 @@ import UIKit
 #endif
 
 struct CardThumbnail: View {
+    @EnvironmentObject private var app: AppModel
+
     let card: Card
     var onTap: () -> Void = {}
 
@@ -27,6 +29,7 @@ struct CardThumbnail: View {
                             .tint(AppColor.primary)
                     }
                 }
+                .id("card-\(card.imageURL?.absoluteString ?? card.slug)-\(app.imageCacheVersion)")
                 .padding(1)
             }
             .aspectRatio(2.0 / 3.0, contentMode: .fit)
@@ -37,6 +40,8 @@ struct CardThumbnail: View {
 }
 
 struct HeroTile: View {
+    @EnvironmentObject private var app: AppModel
+
     let cardId: String?
     let classSlug: String?
     var verticalFocus: CGFloat = 0.3
@@ -59,6 +64,7 @@ struct HeroTile: View {
                             .scaleEffect(1.08)
                     }
                 }
+                .id("hero-\(url.absoluteString)-\(app.imageCacheVersion)")
             }
         }
         .clipped()
@@ -66,6 +72,8 @@ struct HeroTile: View {
 }
 
 struct CardArtStrip: View {
+    @EnvironmentObject private var app: AppModel
+
     let card: Card
 
     var body: some View {
@@ -80,9 +88,28 @@ struct CardArtStrip: View {
                         .offset(y: -10)
                 }
             }
+            .id("crop-\(card.cropImageURL?.absoluteString ?? card.slug)-\(app.imageCacheVersion)")
             LinearGradient(colors: [.black.opacity(0.82), .clear], startPoint: .leading, endPoint: .trailing)
         }
         .clipped()
+    }
+}
+
+struct BackToolbarButton: View {
+    var accessibilityIdentifier: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppColor.onSurface)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr("Back"))
+        .accessibilityIdentifier(accessibilityIdentifier ?? "back")
     }
 }
 

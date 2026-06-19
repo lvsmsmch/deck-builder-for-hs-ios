@@ -404,8 +404,10 @@ struct CardLibraryView: View {
     @State private var selectedCard: Card?
     @State private var showFilters = false
     @State private var searchRevision = 0
+    @State private var scrollToTopRequest = 0
 
-    private let columns = [GridItem(.adaptive(minimum: 112), spacing: 10)]
+    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    private let listTopID = "library-list-top"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -416,26 +418,36 @@ struct CardLibraryView: View {
             ClassChips(selected: filters.classes) { toggle($0.normalizedClassSlug, in: &filters.classes) }
 
             ZStack {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 10) {
-                        ForEach(visibleCards) { card in
-                            CardThumbnail(card: card) { selectedCard = card }
-                                .task {
-                                    if card.id == visibleCards.last?.id {
-                                        await loadNextPage()
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        Color.clear
+                            .frame(height: 0)
+                            .id(listTopID)
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            ForEach(visibleCards) { card in
+                                CardThumbnail(card: card) { selectedCard = card }
+                                    .task {
+                                        if card.id == visibleCards.last?.id {
+                                            await loadNextPage()
+                                        }
                                     }
-                                }
+                            }
+                            if page < pageCount {
+                                ProgressView()
+                                    .tint(AppColor.primary)
+                                    .gridCellColumns(2)
+                                    .padding()
+                            }
                         }
-                        if page < pageCount {
-                            ProgressView()
-                                .tint(AppColor.primary)
-                                .gridCellColumns(columns.count)
-                                .padding()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 110)
+                    }
+                    .onChange(of: scrollToTopRequest) { _, _ in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo(listTopID, anchor: .top)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 110)
                 }
                 if isLoading && visibleCards.isEmpty {
                     ProgressView(L10n.tr("Loading cards..."))
@@ -446,6 +458,12 @@ struct CardLibraryView: View {
                         bodyText: app.cardLoadError ?? app.rotationLoadError ?? L10n.tr("Try changing search or filters."),
                         icon: "square.grid.2x2"
                     )
+                }
+                if isLoading && !visibleCards.isEmpty {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .tint(AppColor.primary)
+                        .frame(maxHeight: .infinity, alignment: .top)
                 }
             }
         }
@@ -459,10 +477,10 @@ struct CardLibraryView: View {
         }
         .task {
             if visibleCards.isEmpty {
-                await reload()
+                await reload(scrollToTop: false)
             }
         }
-        .onChange(of: filters) { _, _ in Task { await reload() } }
+        .onChange(of: filters) { _, _ in Task { await reload(scrollToTop: true) } }
     }
 
     private var libraryHeader: some View {
@@ -537,7 +555,8 @@ struct CardLibraryView: View {
         }
     }
 
-    private func reload() async {
+    @MainActor
+    private func reload(scrollToTop: Bool) async {
         searchRevision += 1
         let revision = searchRevision
         isLoading = true
@@ -548,8 +567,12 @@ struct CardLibraryView: View {
         pageCount = result.pageCount
         totalCount = result.totalCount
         isLoading = false
+        if scrollToTop {
+            scrollToTopRequest += 1
+        }
     }
 
+    @MainActor
     private func loadNextPage() async {
         guard !isLoading, page < pageCount else { return }
         let revision = searchRevision
@@ -577,7 +600,7 @@ struct FilterSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Button(L10n.tr("Reset all")) { filters = CardFilters(textQuery: filters.textQuery) }
+                Button(L10n.tr("Reset all")) { filters = CardFilters() }
                     .buttonStyle(FilterHeaderButtonStyle())
                     .accessibilityIdentifier("filters.reset")
                 Spacer()
@@ -910,8 +933,7 @@ struct CardDetailView: View {
         .navigationTitle("")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(L10n.tr("Close")) { close() }
-                    .accessibilityIdentifier("card-detail.close")
+                BackToolbarButton(accessibilityIdentifier: "card-detail.close") { close() }
             }
         }
         .appBackground()
@@ -935,6 +957,8 @@ struct CardDetailView: View {
 }
 
 struct CardImagePanel: View {
+    @EnvironmentObject private var app: AppModel
+
     let card: Card
 
     var body: some View {
@@ -951,6 +975,7 @@ struct CardImagePanel: View {
                     ProgressView().tint(AppColor.primary)
                 }
             }
+            .id("detail-\(highResolutionURL?.absoluteString ?? card.slug)-\(app.imageCacheVersion)")
         }
         .frame(maxWidth: .infinity)
         .frame(height: 430)
@@ -1111,9 +1136,7 @@ struct SavedDecksView: View {
                         .font(.title2.weight(.bold))
                         .foregroundStyle(AppColor.onSurface)
                     Spacer()
-                    Button(L10n.tr("Close")) { showImport = false }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppColor.primary)
+                    BackToolbarButton(accessibilityIdentifier: "import.close") { showImport = false }
                 }
                 Text(L10n.tr("Paste a Hearthstone deck code. Tap Decode to view and save it."))
                     .font(.subheadline)
@@ -1491,8 +1514,7 @@ struct DeckView: View {
         .navigationTitle("")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(L10n.tr("Close")) { close() }
-                    .accessibilityIdentifier("deck.close")
+                BackToolbarButton(accessibilityIdentifier: "deck.close") { close() }
             }
         }
         .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
@@ -1552,12 +1574,14 @@ struct DeckBuilderView: View {
     @State private var poolCards: [Card] = []
     @State private var poolTotal = 0
     @State private var poolSearchRevision = 0
+    @State private var poolScrollToTopRequest = 0
     @State private var showPoolFilters = false
     @State private var activeTab = 0
     @State private var selectedCard: Card?
     @State private var alertMessage: String?
     @State private var confirmIncompleteSave = false
     @State private var debugSeededDeck = false
+    private let poolListTopID = "builder-pool-list-top"
 
     fileprivate init(
         debugState: DeckBuilderDebugState? = nil,
@@ -1588,10 +1612,9 @@ struct DeckBuilderView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(phaseClassPicker ? L10n.tr("Close") : L10n.tr("Back")) {
+                    BackToolbarButton(accessibilityIdentifier: phaseClassPicker ? "builder.close" : "builder.back") {
                         if phaseClassPicker { close() } else { phaseClassPicker = true }
                     }
-                    .accessibilityIdentifier(phaseClassPicker ? "builder.close" : "builder.back")
                 }
             }
             .overlay {
@@ -1795,34 +1818,44 @@ struct DeckBuilderView: View {
         VStack(spacing: 0) {
             SearchField(text: $poolFilters.textQuery, placeholder: L10n.tr("Search pool"))
             builderPoolControls
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], spacing: 10) {
-                    ForEach(poolCards) { card in
-                        let count = deck[card.id]?.count ?? 0
-                        ZStack(alignment: .topTrailing) {
-                            CardThumbnail(card: card) { add(card) }
-                            if count > 0 {
-                                Text("x\(count)")
-                                    .font(.headline.weight(.bold))
-                                    .foregroundStyle(AppColor.onPrimary)
-                                    .frame(width: 34, height: 30)
-                                    .background(AppColor.primary)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(AppColor.onPrimary.opacity(0.7), lineWidth: 1))
-                                    .padding(7)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Color.clear
+                        .frame(height: 0)
+                        .id(poolListTopID)
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                        ForEach(poolCards) { card in
+                            let count = deck[card.id]?.count ?? 0
+                            ZStack(alignment: .topTrailing) {
+                                CardThumbnail(card: card) { add(card) }
+                                if count > 0 {
+                                    Text("x\(count)")
+                                        .font(.headline.weight(.bold))
+                                        .foregroundStyle(AppColor.onPrimary)
+                                        .frame(width: 34, height: 30)
+                                        .background(AppColor.primary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(AppColor.onPrimary.opacity(0.7), lineWidth: 1))
+                                        .padding(7)
+                                }
                             }
-                        }
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(count > 0 ? AppColor.primary : Color.clear, lineWidth: 2)
-                        )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(count > 0 ? AppColor.primary : Color.clear, lineWidth: 2)
+                            )
                             .contextMenu {
                                 Button(L10n.tr("Details")) { selectedCard = card }
                             }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 16)
+                }
+                .onChange(of: poolScrollToTopRequest) { _, _ in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(poolListTopID, anchor: .top)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 16)
             }
         }
         .onChange(of: poolFilters) { _, _ in Task { await reloadPool() } }
@@ -1911,6 +1944,7 @@ struct DeckBuilderView: View {
     private var cardCount: Int { deck.values.reduce(0) { $0 + $1.count } }
     private var maxDeckSize: Int { deck.values.contains(where: { $0.card.isPrinceRenathal }) ? 40 : 30 }
 
+    @MainActor
     private func reloadPool() async {
         guard let chosenClass else { return }
         poolSearchRevision += 1
@@ -1922,6 +1956,7 @@ struct DeckBuilderView: View {
         guard revision == poolSearchRevision else { return }
         poolCards = result.items.filter { !isDefaultHero($0) }
         poolTotal = result.totalCount
+        poolScrollToTopRequest += 1
     }
 
     private func add(_ card: Card) {
@@ -2114,11 +2149,11 @@ struct SettingsView: View {
                 SettingsGroup(title: L10n.tr("About")) {
                     SettingsInfoRow(title: L10n.tr("Version"), value: "1.0")
                     SettingsDivider()
-                    Link("iamajavagod@gmail.com", destination: URL(string: "mailto:iamajavagod@gmail.com")!)
-                        .font(.body)
-                        .foregroundStyle(AppColor.primary)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    SettingsLinkRow(
+                        title: L10n.tr("Contact developer"),
+                        value: "iamajavagod@gmail.com",
+                        destination: URL(string: "mailto:iamajavagod@gmail.com")!
+                    )
                 }
             }
             .padding(.horizontal, 16)
@@ -2285,6 +2320,35 @@ private struct SettingsInfoRow: View {
         }
         .padding(14)
         .frame(minHeight: 54)
+    }
+}
+
+private struct SettingsLinkRow: View {
+    let title: String
+    let value: String
+    let destination: URL
+
+    var body: some View {
+        Link(destination: destination) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.body)
+                        .foregroundStyle(AppColor.onSurface)
+                    Text(value)
+                        .font(.subheadline)
+                        .foregroundStyle(AppColor.onSurfaceDim)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppColor.onSurfaceDimmer)
+            }
+            .padding(14)
+            .frame(minHeight: 54)
+        }
     }
 }
 

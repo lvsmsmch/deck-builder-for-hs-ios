@@ -20,6 +20,7 @@ struct Card: Identifiable, Codable, Hashable {
     let rarity: Rarity?
     let cardType: CardType
     let minionType: MinionType?
+    let minionTypes: [MinionType]
     let spellSchool: SpellSchool?
     let keywords: [Keyword]
     let collectible: Bool
@@ -34,6 +35,93 @@ struct Card: Identifiable, Codable, Hashable {
             return false
         }
         return slug.range(of: #"^HERO_\d+[A-Za-z]*$"#, options: .regularExpression) != nil
+    }
+
+    init(
+        id: Int,
+        slug: String,
+        name: String,
+        text: String?,
+        flavorText: String?,
+        imageURL: URL?,
+        cropImageURL: URL?,
+        artistName: String?,
+        manaCost: Int,
+        attack: Int?,
+        health: Int?,
+        durability: Int?,
+        armor: Int?,
+        classes: [ClassMeta],
+        cardSet: Expansion?,
+        rarity: Rarity?,
+        cardType: CardType,
+        minionType: MinionType?,
+        minionTypes: [MinionType] = [],
+        spellSchool: SpellSchool?,
+        keywords: [Keyword],
+        collectible: Bool,
+        childIds: [String]
+    ) {
+        self.id = id
+        self.slug = slug
+        self.name = name
+        self.text = text
+        self.flavorText = flavorText
+        self.imageURL = imageURL
+        self.cropImageURL = cropImageURL
+        self.artistName = artistName
+        self.manaCost = manaCost
+        self.attack = attack
+        self.health = health
+        self.durability = durability
+        self.armor = armor
+        self.classes = classes
+        self.cardSet = cardSet
+        self.rarity = rarity
+        self.cardType = cardType
+        self.minionType = minionType
+        self.minionTypes = minionTypes.isEmpty ? minionType.map { [$0] } ?? [] : minionTypes
+        self.spellSchool = spellSchool
+        self.keywords = keywords
+        self.collectible = collectible
+        self.childIds = childIds
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, slug, name, text, flavorText, imageURL, cropImageURL, artistName, manaCost, attack, health
+        case durability, armor, classes, cardSet, rarity, cardType, minionType, minionTypes, spellSchool
+        case keywords, collectible, childIds
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let minionType = try container.decodeIfPresent(MinionType.self, forKey: .minionType)
+        let minionTypes = try container.decodeIfPresent([MinionType].self, forKey: .minionTypes) ?? minionType.map { [$0] } ?? []
+        self.init(
+            id: try container.decode(Int.self, forKey: .id),
+            slug: try container.decode(String.self, forKey: .slug),
+            name: try container.decode(String.self, forKey: .name),
+            text: try container.decodeIfPresent(String.self, forKey: .text),
+            flavorText: try container.decodeIfPresent(String.self, forKey: .flavorText),
+            imageURL: try container.decodeIfPresent(URL.self, forKey: .imageURL),
+            cropImageURL: try container.decodeIfPresent(URL.self, forKey: .cropImageURL),
+            artistName: try container.decodeIfPresent(String.self, forKey: .artistName),
+            manaCost: try container.decode(Int.self, forKey: .manaCost),
+            attack: try container.decodeIfPresent(Int.self, forKey: .attack),
+            health: try container.decodeIfPresent(Int.self, forKey: .health),
+            durability: try container.decodeIfPresent(Int.self, forKey: .durability),
+            armor: try container.decodeIfPresent(Int.self, forKey: .armor),
+            classes: try container.decode([ClassMeta].self, forKey: .classes),
+            cardSet: try container.decodeIfPresent(Expansion.self, forKey: .cardSet),
+            rarity: try container.decodeIfPresent(Rarity.self, forKey: .rarity),
+            cardType: try container.decode(CardType.self, forKey: .cardType),
+            minionType: minionType,
+            minionTypes: minionTypes,
+            spellSchool: try container.decodeIfPresent(SpellSchool.self, forKey: .spellSchool),
+            keywords: try container.decode([Keyword].self, forKey: .keywords),
+            collectible: try container.decode(Bool.self, forKey: .collectible),
+            childIds: try container.decode([String].self, forKey: .childIds)
+        )
     }
 }
 
