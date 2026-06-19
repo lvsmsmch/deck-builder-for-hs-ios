@@ -53,10 +53,10 @@ struct RootView: View {
     private func debugStandaloneView(_ screen: DebugStandaloneScreen) -> some View {
         switch screen {
         case .libraryFilters:
-            DebugFilterSheetRoute()
+            DebugFilterSheetRoute { debugStandaloneScreen = nil }
                 .accessibilityIdentifier("screen.library.filters")
         case .cardDetail:
-            DebugCardDetailRoute()
+            DebugCardDetailRoute { debugStandaloneScreen = nil }
                 .accessibilityIdentifier("screen.card-detail")
         case .savedNewDialog:
             NavigationStack { SavedDecksView(debugState: .newDeckDialog) }
@@ -68,19 +68,19 @@ struct RootView: View {
             NavigationStack { SavedDecksView(debugState: .renameAlert) }
                 .accessibilityIdentifier("screen.saved.rename")
         case .deckView:
-            DebugDeckRoute()
+            DebugDeckRoute { debugStandaloneScreen = nil }
                 .accessibilityIdentifier("screen.deck-view")
         case .builder:
-            DeckBuilderView { _ in }
+            DeckBuilderView(onClose: { debugStandaloneScreen = nil }) { _ in }
                 .accessibilityIdentifier("screen.builder")
         case .builderEditorDeck:
-            DeckBuilderView(debugState: .editorDeck) { _ in }
+            DeckBuilderView(debugState: .editorDeck, onClose: { debugStandaloneScreen = nil }) { _ in }
                 .accessibilityIdentifier("screen.builder.editor-deck")
         case .builderEditorPool:
-            DeckBuilderView(debugState: .editorPool) { _ in }
+            DeckBuilderView(debugState: .editorPool, onClose: { debugStandaloneScreen = nil }) { _ in }
                 .accessibilityIdentifier("screen.builder.editor-pool")
         case .builderIncompleteDialog:
-            DeckBuilderView(debugState: .incompleteDialog) { _ in }
+            DeckBuilderView(debugState: .incompleteDialog, onClose: { debugStandaloneScreen = nil }) { _ in }
                 .accessibilityIdentifier("screen.builder.incomplete-dialog")
         }
     }
@@ -265,6 +265,8 @@ private extension AppTab {
 }
 
 private struct DebugFilterSheetRoute: View {
+    let onClose: () -> Void
+
     @State private var filters = CardFilters(
         format: .standard,
         rarities: ["legendary"],
@@ -275,12 +277,14 @@ private struct DebugFilterSheetRoute: View {
     )
 
     var body: some View {
-        FilterSheet(filters: $filters)
+        FilterSheet(filters: $filters, onApply: onClose)
             .appBackground()
     }
 }
 
 private struct DebugCardDetailRoute: View {
+    let onClose: () -> Void
+
     @EnvironmentObject private var app: AppModel
     @State private var card: Card?
     @State private var error: String?
@@ -289,7 +293,7 @@ private struct DebugCardDetailRoute: View {
         NavigationStack {
             Group {
                 if let card {
-                    CardDetailView(card: card)
+                    CardDetailView(card: card, onClose: onClose)
                 } else if let error {
                     EmptyStateView(title: L10n.tr("Error"), bodyText: error, icon: "exclamationmark.triangle")
                 } else {
@@ -316,6 +320,8 @@ private struct DebugCardDetailRoute: View {
 }
 
 private struct DebugDeckRoute: View {
+    let onClose: () -> Void
+
     @EnvironmentObject private var app: AppModel
     @State private var deck: Deck?
     @State private var error: String?
@@ -324,7 +330,7 @@ private struct DebugDeckRoute: View {
         NavigationStack {
             Group {
                 if let deck {
-                    DeckView(deck: deck)
+                    DeckView(deck: deck, onClose: onClose)
                 } else if let error {
                     EmptyStateView(title: L10n.tr("Error"), bodyText: error, icon: "exclamationmark.triangle")
                 } else {
@@ -529,6 +535,8 @@ struct CardLibraryView: View {
 
 struct FilterSheet: View {
     @Binding var filters: CardFilters
+    var onApply: (() -> Void)?
+
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -536,9 +544,11 @@ struct FilterSheet: View {
             HStack {
                 Button(L10n.tr("Reset all")) { filters = CardFilters(textQuery: filters.textQuery) }
                     .buttonStyle(FilterHeaderButtonStyle())
+                    .accessibilityIdentifier("filters.reset")
                 Spacer()
-                Button(L10n.tr("Apply")) { dismiss() }
+                Button(L10n.tr("Apply")) { close() }
                     .buttonStyle(FilterHeaderButtonStyle(isProminent: true))
+                    .accessibilityIdentifier("filters.apply")
             }
             .padding(.horizontal, 20)
             .padding(.top, 18)
@@ -595,6 +605,14 @@ struct FilterSheet: View {
             .appBackground()
         }
         .appBackground()
+    }
+
+    private func close() {
+        if let onApply {
+            onApply()
+        } else {
+            dismiss()
+        }
     }
 
     private func formatButton(_ format: CardFormatFilter) -> some View {
@@ -658,6 +676,8 @@ private struct FilterHeaderButtonStyle: ButtonStyle {
 
 struct CardDetailView: View {
     let card: Card
+    var onClose: (() -> Void)?
+
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -704,8 +724,21 @@ struct CardDetailView: View {
             }
         }
         .navigationTitle("")
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("Close")) { dismiss() } } }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(L10n.tr("Close")) { close() }
+                    .accessibilityIdentifier("card-detail.close")
+            }
+        }
         .appBackground()
+    }
+
+    private func close() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
     }
 
     private var subtitle: String {
@@ -858,7 +891,7 @@ struct SavedDecksView: View {
         .sheet(isPresented: $showImport) { importSheet }
         .sheet(item: $selectedDeck) { deck in NavigationStack { DeckView(deck: deck) } }
         .sheet(isPresented: $showBuilder) {
-            DeckBuilderView { deck in
+            DeckBuilderView(onClose: { showBuilder = false }) { deck in
                 showBuilder = false
                 selectedDeck = deck
             }
@@ -1015,6 +1048,8 @@ struct DeckView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
     let deck: Deck
+    var onClose: (() -> Void)?
+
     @State private var selectedCard: Card?
     @State private var actionError: String?
 
@@ -1074,7 +1109,12 @@ struct DeckView: View {
             .background(AppColor.surfaceContainer)
         }
         .navigationTitle("")
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("Close")) { dismiss() } } }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(L10n.tr("Close")) { close() }
+                    .accessibilityIdentifier("deck.close")
+            }
+        }
         .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
         .alert(L10n.tr("Error"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button(L10n.tr("OK"), role: .cancel) { actionError = nil }
@@ -1082,6 +1122,14 @@ struct DeckView: View {
             Text(actionError ?? "")
         }
         .appBackground()
+    }
+
+    private func close() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
     }
 }
 
@@ -1096,6 +1144,7 @@ private enum Clipboard {
 struct DeckBuilderView: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
+    let onClose: (() -> Void)?
     let onSaved: (Deck) -> Void
 
     @State private var phaseClassPicker = true
@@ -1112,7 +1161,12 @@ struct DeckBuilderView: View {
     @State private var alertMessage: String?
     @State private var confirmIncompleteSave = false
 
-    fileprivate init(debugState: DeckBuilderDebugState? = nil, onSaved: @escaping (Deck) -> Void) {
+    fileprivate init(
+        debugState: DeckBuilderDebugState? = nil,
+        onClose: (() -> Void)? = nil,
+        onSaved: @escaping (Deck) -> Void
+    ) {
+        self.onClose = onClose
         self.onSaved = onSaved
         let startsInEditor = debugState == .editorDeck || debugState == .editorPool || debugState == .incompleteDialog
         _phaseClassPicker = State(initialValue: !startsInEditor)
@@ -1135,8 +1189,9 @@ struct DeckBuilderView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(phaseClassPicker ? L10n.tr("Close") : L10n.tr("Back")) {
-                        if phaseClassPicker { dismiss() } else { phaseClassPicker = true }
+                        if phaseClassPicker { close() } else { phaseClassPicker = true }
                     }
+                    .accessibilityIdentifier(phaseClassPicker ? "builder.close" : "builder.back")
                 }
             }
             .alert(L10n.tr("Deck builder"), isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
@@ -1152,6 +1207,14 @@ struct DeckBuilderView: View {
             }
             .sheet(item: $selectedCard) { card in NavigationStack { CardDetailView(card: card) } }
             .appBackground()
+        }
+    }
+
+    private func close() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
         }
     }
 
