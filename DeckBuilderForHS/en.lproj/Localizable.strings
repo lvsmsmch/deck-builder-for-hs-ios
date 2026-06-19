@@ -40,6 +40,7 @@
 "Deck name" = "Deck name";
 "Decode" = "Decode";
 "Delete" = "Delete";
+"Delete deck?" = "Delete deck?";
 "Demon H." = "Demon H.";
 "Demon Hunter" = "Demon Hunter";
 "Details" = "Details";
@@ -60,6 +61,9 @@
 "Legendary limit (x1)" = "Legendary limit (x1)";
 "Library" = "Library";
 "Loading cards..." = "Loading cards...";
+"Preparing downloaded cards..." = "Preparing downloaded cards...";
+"loading.cards.downloading" = "Downloading card data: %@ loaded";
+"loading.cards.downloading.known" = "Downloading card data: %@ / %@ (%@ left)";
 "Locale" = "Locale";
 "Last update check" = "Last update check";
 "Mage" = "Mage";
@@ -77,6 +81,7 @@
 "Paladin" = "Paladin";
 "Paste a Hearthstone deck code. Tap Decode to view and save it." = "Paste a Hearthstone deck code. Tap Decode to view and save it.";
 "Paste deck code" = "Paste deck code";
+"Paste deck code here" = "Paste deck code here";
 "Pick a class to begin." = "Pick a class to begin.";
 "Pool" = "Pool";
 "Priest" = "Priest";
@@ -121,6 +126,7 @@
 "builder.incomplete.save.message" = "This deck has only %d/%d cards. Save it anyway?";
 "builder.wrongClass" = "Not a %@ or Neutral card";
 "deck.warning.incomplete" = "Deck has only %d/%d cards.";
+"delete.deck.message" = "Delete \"%@\"?";
 "default.classDeckName" = "%@ deck";
 "library.count.format" = "%d cards";
 "Rotation data failed to load." = "Rotation data failed to load.";

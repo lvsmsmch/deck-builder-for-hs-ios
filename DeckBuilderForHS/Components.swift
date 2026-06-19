@@ -265,9 +265,9 @@ struct ClassChips: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
             .padding(.bottom, 10)
         }
+        .padding(.horizontal, 16)
     }
 }
 

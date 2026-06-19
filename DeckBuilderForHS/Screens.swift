@@ -72,6 +72,9 @@ struct RootView: View {
         case .savedRename:
             NavigationStack { SavedDecksView(debugState: .renameAlert) }
                 .accessibilityIdentifier("screen.saved.rename")
+        case .savedDelete:
+            NavigationStack { SavedDecksView(debugState: .deleteDialog) }
+                .accessibilityIdentifier("screen.saved.delete")
         case .deckView:
             DebugDeckRoute { debugStandaloneScreen = nil }
                 .accessibilityIdentifier("screen.deck-view")
@@ -107,7 +110,7 @@ private enum DebugLaunch {
             .saved
         case .more, .settings, .cardData:
             .more
-        case .library, .libraryFilters, .cardDetail, .savedNewDialog, .savedImport, .savedRename, .deckView,
+        case .library, .libraryFilters, .cardDetail, .savedNewDialog, .savedImport, .savedRename, .savedDelete, .deckView,
              .deckViewToast, .builder, .builderEditorDeck, .builderEditorPool, .builderEditorPoolFilled,
              .builderIncompleteDialog, .settingsClearDialog, nil:
             .library
@@ -137,6 +140,8 @@ private enum DebugLaunch {
             .savedImport
         case .savedRename:
             .savedRename
+        case .savedDelete:
+            .savedDelete
         case .deckView:
             .deckView
         case .deckViewToast:
@@ -181,6 +186,7 @@ private enum DebugLaunchScreen: String {
     case savedNewDialog = "saved-new-dialog"
     case savedImport = "saved-import"
     case savedRename = "saved-rename"
+    case savedDelete = "saved-delete"
     case deckView = "deck-view"
     case deckViewToast = "deck-view-toast"
     case more
@@ -200,6 +206,7 @@ private enum DebugStandaloneScreen {
     case savedNewDialog
     case savedImport
     case savedRename
+    case savedDelete
     case deckView
     case deckViewToast
     case builder
@@ -262,6 +269,7 @@ private struct AppBottomBar: View {
                     }
                     .foregroundStyle(selectedTab == tab ? AppColor.primary : AppColor.onSurfaceDimmer)
                     .frame(maxWidth: .infinity, minHeight: 64)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("tab.\(tab.accessibilityID)")
@@ -444,14 +452,11 @@ struct CardLibraryView: View {
                         .padding(.bottom, 110)
                     }
                     .onChange(of: scrollToTopRequest) { _, _ in
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(listTopID, anchor: .top)
-                        }
+                        proxy.scrollTo(listTopID, anchor: .top)
                     }
                 }
                 if isLoading && visibleCards.isEmpty {
-                    ProgressView(L10n.tr("Loading cards..."))
-                        .tint(AppColor.primary)
+                    CardLoadingView(progress: app.cardLoadProgress)
                 } else if visibleCards.isEmpty && !isLoading {
                     EmptyStateView(
                         title: filters.hasFilters ? L10n.tr("No cards match these filters.") : L10n.tr("No cards loaded yet."),
@@ -561,15 +566,15 @@ struct CardLibraryView: View {
         let revision = searchRevision
         isLoading = true
         page = 1
+        if scrollToTop {
+            scrollToTopRequest += 1
+        }
         let result = await app.searchCards(filters: filters, page: 1)
         guard revision == searchRevision else { return }
         visibleCards = result.items
         pageCount = result.pageCount
         totalCount = result.totalCount
         isLoading = false
-        if scrollToTop {
-            scrollToTopRequest += 1
-        }
     }
 
     @MainActor
@@ -588,6 +593,48 @@ struct CardLibraryView: View {
 
     private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
         if set.contains(value) { set.remove(value) } else { set.insert(value) }
+    }
+}
+
+private struct CardLoadingView: View {
+    let progress: CardLoadProgress?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+                .tint(AppColor.primary)
+            Text(progressText)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(AppColor.onSurface)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private var progressText: String {
+        guard let progress else {
+            return L10n.tr("Loading cards...")
+        }
+        switch progress.stage {
+        case .downloading:
+            let downloaded = readableMB(progress.downloadedBytes)
+            if let totalBytes = progress.totalBytes {
+                let total = readableMB(totalBytes)
+                let remaining = readableMB(max(0, totalBytes - progress.downloadedBytes))
+                return L10n.format("loading.cards.downloading.known", downloaded, total, remaining)
+            }
+            return L10n.format("loading.cards.downloading", downloaded)
+        case .preparing:
+            return L10n.tr("Preparing downloaded cards...")
+        }
+    }
+
+    private func readableMB(_ bytes: Int64) -> String {
+        let mb = Double(bytes) / (1024.0 * 1024.0)
+        if mb >= 10 {
+            return String(format: "%.0f MB", mb)
+        }
+        return String(format: "%.1f MB", mb)
     }
 }
 
@@ -999,12 +1046,14 @@ struct SavedDecksView: View {
     @State private var actionError: String?
     @State private var renameDeck: DeckPreview?
     @State private var renameText = ""
+    @State private var deckPendingDelete: DeckPreview?
 
     fileprivate init(debugState: SavedDecksDebugState? = nil) {
         _showNewDeck = State(initialValue: debugState == .newDeckDialog)
         _showImport = State(initialValue: debugState == .importSheet)
         _renameDeck = State(initialValue: debugState == .renameAlert ? DeckPreview.debugSample : nil)
         _renameText = State(initialValue: debugState == .renameAlert ? DeckPreview.debugSample.name : "")
+        _deckPendingDelete = State(initialValue: debugState == .deleteDialog ? DeckPreview.debugSample : nil)
     }
 
     var body: some View {
@@ -1042,11 +1091,7 @@ struct SavedDecksView: View {
                                 renameDeck = deck
                                 renameText = deck.name
                             } onDelete: {
-                                do {
-                                    try app.deleteDeck(code: deck.code)
-                                } catch {
-                                    actionError = error.localizedDescription
-                                }
+                                deckPendingDelete = deck
                             }
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                             .listRowBackground(AppColor.surface)
@@ -1070,29 +1115,33 @@ struct SavedDecksView: View {
             .padding(.bottom, 104)
         }
         .appBackground()
-        .sheet(isPresented: $showImport) { importSheet }
+        .sheet(isPresented: $showNewDeck) {
+            NewDeckSheet(
+                onCreate: {
+                    showNewDeck = false
+                    presentAfterSheetDismissal { showBuilder = true }
+                },
+                onImport: {
+                    showNewDeck = false
+                    presentAfterSheetDismissal { showImport = true }
+                },
+                onCancel: { showNewDeck = false }
+            )
+            .presentationDetents([.height(280)])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showImport) {
+            importSheet
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(item: $selectedDeck) { deck in NavigationStack { DeckView(deck: deck) } }
         .sheet(isPresented: $showBuilder) {
             DeckBuilderView(onClose: { showBuilder = false }) { deck in
                 showBuilder = false
-                selectedDeck = deck
             }
         }
         .overlay {
-            if showNewDeck {
-                NewDeckDialog(
-                    onCreate: {
-                        showNewDeck = false
-                        showBuilder = true
-                    },
-                    onImport: {
-                        showNewDeck = false
-                        showImport = true
-                    },
-                    onCancel: { showNewDeck = false }
-                )
-                .transition(.scale(scale: 0.96).combined(with: .opacity))
-            }
             if renameDeck != nil {
                 RenameDeckDialog(
                     text: $renameText,
@@ -1111,10 +1160,22 @@ struct SavedDecksView: View {
                 }
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
+            if let deckPendingDelete {
+                DarkConfirmDialog(
+                    title: L10n.tr("Delete deck?"),
+                    message: L10n.format("delete.deck.message", deckPendingDelete.name),
+                    confirmTitle: L10n.tr("Delete"),
+                    cancelTitle: L10n.tr("Cancel"),
+                    isDestructive: true,
+                    onConfirm: { delete(deckPendingDelete) },
+                    onCancel: { self.deckPendingDelete = nil }
+                )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
         }
-        .animation(.spring(response: 0.26, dampingFraction: 0.9), value: showNewDeck)
         .animation(.spring(response: 0.26, dampingFraction: 0.9), value: renameDeck != nil)
         .animation(.spring(response: 0.26, dampingFraction: 0.9), value: actionError)
+        .animation(.spring(response: 0.26, dampingFraction: 0.9), value: deckPendingDelete != nil)
     }
 
     private func saveRename() {
@@ -1128,79 +1189,83 @@ struct SavedDecksView: View {
         }
     }
 
+    private func delete(_ deck: DeckPreview) {
+        do {
+            try app.deleteDeck(code: deck.code)
+            deckPendingDelete = nil
+        } catch {
+            deckPendingDelete = nil
+            actionError = error.localizedDescription
+        }
+    }
+
+    private func presentAfterSheetDismissal(_ action: @escaping () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28, execute: action)
+    }
+
     private var importSheet: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text(L10n.tr("Import deck"))
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(AppColor.onSurface)
-                    Spacer()
-                    BackToolbarButton(accessibilityIdentifier: "import.close") { showImport = false }
-                }
-                Text(L10n.tr("Paste a Hearthstone deck code. Tap Decode to view and save it."))
-                    .font(.subheadline)
-                    .foregroundStyle(AppColor.onSurfaceDim)
-                TextEditor(text: $importCode)
-                    .scrollContentBackground(.hidden)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                BackToolbarButton(accessibilityIdentifier: "import.close") { showImport = false }
+                Text(L10n.tr("Import deck"))
+                    .font(.title2.weight(.bold))
                     .foregroundStyle(AppColor.onSurface)
-                    .tint(AppColor.primary)
-                    .frame(minHeight: 150)
-                    .padding(10)
-                    .background(AppColor.surfaceContainer)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
-                if let importError {
-                    Text(importError)
-                        .foregroundStyle(AppColor.error)
-                        .font(.footnote)
-                }
-                Button {
-                    Task {
-                        do {
-                            selectedDeck = try await app.decodeDeck(code: importCode)
-                            showImport = false
-                            importCode = ""
-                            importError = nil
-                        } catch {
-                            importError = error.localizedDescription
-                        }
-                    }
-                } label: {
-                    Text(L10n.tr("Decode"))
-                }
-                .buttonStyle(PrimaryButtonStyle())
                 Spacer()
             }
-            .padding(20)
-            .appBackground()
+            Text(L10n.tr("Paste a Hearthstone deck code. Tap Decode to view and save it."))
+                .font(.subheadline)
+                .foregroundStyle(AppColor.onSurfaceDim)
+            PlaceholderTextEditor(
+                text: $importCode,
+                placeholder: L10n.tr("Paste deck code here")
+            )
+            .frame(minHeight: 150)
+            if let importError {
+                Text(importError)
+                    .foregroundStyle(AppColor.error)
+                    .font(.footnote)
+            }
+            Button {
+                Task {
+                    do {
+                        selectedDeck = try await app.decodeDeck(code: importCode)
+                        showImport = false
+                        importCode = ""
+                        importError = nil
+                    } catch {
+                        importError = error.localizedDescription
+                    }
+                }
+            } label: {
+                Text(L10n.tr("Decode"))
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            Spacer(minLength: 0)
         }
+        .padding(20)
+        .appBackground()
     }
 }
 
-private struct NewDeckDialog: View {
+private struct NewDeckSheet: View {
     let onCreate: () -> Void
     let onImport: () -> Void
     let onCancel: () -> Void
 
     var body: some View {
-        DarkDialogBackdrop(onDismiss: onCancel) {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                BackToolbarButton(accessibilityIdentifier: "new-deck.close", action: onCancel)
                 Text(L10n.tr("New deck"))
                     .font(.title2.weight(.bold))
                     .foregroundStyle(AppColor.onSurface)
-                DialogActionButton(title: L10n.tr("Create from scratch"), systemImage: "plus.square.on.square", action: onCreate)
-                DialogActionButton(title: L10n.tr("Paste deck code"), systemImage: "doc.on.doc", action: onImport)
-                Button(L10n.tr("Cancel"), action: onCancel)
-                    .font(.headline)
-                    .foregroundStyle(AppColor.onSurfaceDim)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
+                Spacer()
             }
-            .padding(18)
-            .dialogCard()
-            .padding(.horizontal, 24)
+            DialogActionButton(title: L10n.tr("Create from scratch"), systemImage: "plus.square.on.square", action: onCreate)
+            DialogActionButton(title: L10n.tr("Paste deck code"), systemImage: "doc.on.doc", action: onImport)
         }
+        .padding(20)
+        .appBackground()
     }
 }
 
@@ -1266,6 +1331,7 @@ private struct DarkConfirmDialog: View {
     let message: String
     let confirmTitle: String
     let cancelTitle: String
+    var isDestructive = false
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
@@ -1281,7 +1347,7 @@ private struct DarkConfirmDialog: View {
                     Button(cancelTitle, action: onCancel)
                         .buttonStyle(SecondaryDialogButtonStyle())
                     Button(confirmTitle, action: onConfirm)
-                        .buttonStyle(PrimaryDialogButtonStyle())
+                        .buttonStyle(PrimaryDialogButtonStyle(tint: isDestructive ? AppColor.error : AppColor.primary))
                 }
             }
             .padding(18)
@@ -1305,6 +1371,31 @@ private struct ToastBanner: View {
             .overlay(Capsule().stroke(AppColor.outlineSoft, lineWidth: 1))
             .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
             .padding(.horizontal, 20)
+    }
+}
+
+private struct PlaceholderTextEditor: View {
+    @Binding var text: String
+    let placeholder: String
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.body)
+                    .foregroundStyle(AppColor.onSurfaceDim)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 18)
+            }
+            TextEditor(text: $text)
+                .scrollContentBackground(.hidden)
+                .foregroundStyle(AppColor.onSurface)
+                .tint(AppColor.primary)
+                .padding(10)
+        }
+        .background(AppColor.surfaceContainer)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(AppColor.outlineSoft, lineWidth: 1))
     }
 }
 
@@ -1345,6 +1436,7 @@ private struct DarkDialogBackdrop<Content: View>: View {
 
 private struct PrimaryDialogButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    var tint: Color = AppColor.primary
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -1352,7 +1444,7 @@ private struct PrimaryDialogButtonStyle: ButtonStyle {
             .foregroundStyle(isEnabled ? AppColor.onPrimary : AppColor.onSurfaceDimmer)
             .frame(maxWidth: .infinity)
             .frame(height: 48)
-            .background(isEnabled ? AppColor.primary.opacity(configuration.isPressed ? 0.78 : 1) : AppColor.surfaceContainerHighest)
+            .background(isEnabled ? tint.opacity(configuration.isPressed ? 0.78 : 1) : AppColor.surfaceContainerHighest)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
@@ -1383,6 +1475,7 @@ private enum SavedDecksDebugState {
     case newDeckDialog
     case importSheet
     case renameAlert
+    case deleteDialog
 }
 
 private extension DeckPreview {
@@ -1702,7 +1795,14 @@ struct DeckBuilderView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
 
-            if activeTab == 0 { deckPane } else { poolPane }
+            ZStack {
+                deckPane
+                    .opacity(activeTab == 0 ? 1 : 0)
+                    .allowsHitTesting(activeTab == 0)
+                poolPane
+                    .opacity(activeTab == 1 ? 1 : 0)
+                    .allowsHitTesting(activeTab == 1)
+            }
             bottomActions
         }
     }
@@ -1732,6 +1832,7 @@ struct DeckBuilderView: View {
                 .frame(height: 36)
                 .background(isSelected ? AppColor.primary : Color.clear)
                 .clipShape(Capsule())
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -1753,7 +1854,7 @@ struct DeckBuilderView: View {
                 ForEach(GameFormat.allCases.filter { $0 != .unknown }) { nextFormat in
                     Button(nextFormat.displayName) {
                         format = nextFormat
-                        Task { await reloadPool() }
+                        Task { await reloadPool(scrollToTop: true) }
                     }
                 }
             } label: {
@@ -1850,15 +1951,13 @@ struct DeckBuilderView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 16)
-                }
-                .onChange(of: poolScrollToTopRequest) { _, _ in
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(poolListTopID, anchor: .top)
                     }
+                    .onChange(of: poolScrollToTopRequest) { _, _ in
+                        proxy.scrollTo(poolListTopID, anchor: .top)
                 }
             }
         }
-        .onChange(of: poolFilters) { _, _ in Task { await reloadPool() } }
+        .onChange(of: poolFilters) { _, _ in Task { await reloadPool(scrollToTop: true) } }
     }
 
     private var builderPoolControls: some View {
@@ -1945,10 +2044,13 @@ struct DeckBuilderView: View {
     private var maxDeckSize: Int { deck.values.contains(where: { $0.card.isPrinceRenathal }) ? 40 : 30 }
 
     @MainActor
-    private func reloadPool() async {
+    private func reloadPool(scrollToTop: Bool = false) async {
         guard let chosenClass else { return }
         poolSearchRevision += 1
         let revision = poolSearchRevision
+        if scrollToTop {
+            poolScrollToTopRequest += 1
+        }
         var filters = poolFilters
         filters.classes = [chosenClass, "neutral"]
         filters.collectibleOnly = true
@@ -1956,7 +2058,6 @@ struct DeckBuilderView: View {
         guard revision == poolSearchRevision else { return }
         poolCards = result.items.filter { !isDefaultHero($0) }
         poolTotal = result.totalCount
-        poolScrollToTopRequest += 1
     }
 
     private func add(_ card: Card) {
@@ -2324,12 +2425,16 @@ private struct SettingsInfoRow: View {
 }
 
 private struct SettingsLinkRow: View {
+    @Environment(\.openURL) private var openURL
+
     let title: String
     let value: String
     let destination: URL
 
     var body: some View {
-        Link(destination: destination) {
+        Button {
+            openURL(destination)
+        } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
@@ -2348,7 +2453,9 @@ private struct SettingsLinkRow: View {
             }
             .padding(14)
             .frame(minHeight: 54)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
 

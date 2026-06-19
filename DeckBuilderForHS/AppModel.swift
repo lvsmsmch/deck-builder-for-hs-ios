@@ -7,6 +7,7 @@ final class AppModel: ObservableObject {
     @Published var preferences: AppPreferences
     @Published private(set) var cards: [Card] = []
     @Published private(set) var isLoadingCards = false
+    @Published private(set) var cardLoadProgress: CardLoadProgress?
     @Published private(set) var cardLoadError: String?
     @Published private(set) var cardCacheInfo: CardCacheInfo?
     @Published private(set) var rotationLoadError: String?
@@ -65,8 +66,11 @@ final class AppModel: ObservableObject {
 
         let locale = preferences.cardLocale
         let hsJson = hsJson
+        let progressHandler: @Sendable (CardLoadProgress?) async -> Void = { [weak self] progress in
+            await self?.setCardLoadProgress(progress)
+        }
         let task = Task.detached(priority: .userInitiated) {
-            try await hsJson.loadCards(locale: locale, forceRefresh: forceRefresh)
+            try await hsJson.loadCards(locale: locale, forceRefresh: forceRefresh, progress: progressHandler)
         }
         cardLoadTask = task
         isLoadingCards = true
@@ -74,6 +78,7 @@ final class AppModel: ObservableObject {
         defer {
             cardLoadTask = nil
             isLoadingCards = false
+            cardLoadProgress = nil
         }
         do {
             let snapshot = try await task.value
@@ -167,6 +172,10 @@ final class AppModel: ObservableObject {
         URLCache.shared.removeAllCachedResponses()
         URLCache.shared.removeCachedResponses(since: .distantPast)
         imageCacheVersion += 1
+    }
+
+    private func setCardLoadProgress(_ progress: CardLoadProgress?) {
+        cardLoadProgress = progress
     }
 
     private func installCards(_ loaded: [Card]) {

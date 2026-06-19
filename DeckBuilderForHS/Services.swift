@@ -39,7 +39,11 @@ actor HsJsonService {
         encoder.dateEncodingStrategy = .iso8601
     }
 
-    func loadCards(locale: String, forceRefresh: Bool) async throws -> CardCacheSnapshot {
+    func loadCards(
+        locale: String,
+        forceRefresh: Bool,
+        progress: (@Sendable (CardLoadProgress?) async -> Void)? = nil
+    ) async throws -> CardCacheSnapshot {
         let cached = try? loadCached(locale: locale)
         if !forceRefresh, let cached, !cached.cards.isEmpty {
             return cached
@@ -61,7 +65,7 @@ actor HsJsonService {
                 return updated
             }
 
-            return try await fetchCards(locale: locale, build: latest)
+            return try await fetchCards(locale: locale, build: latest, progress: progress)
         } catch {
             if !forceRefresh, let cached, !cached.cards.isEmpty {
                 return cached
@@ -85,12 +89,33 @@ actor HsJsonService {
         return String(html[range])
     }
 
-    private func fetchCards(locale: String, build: String) async throws -> CardCacheSnapshot {
+    private func fetchCards(
+        locale: String,
+        build: String,
+        progress: (@Sendable (CardLoadProgress?) async -> Void)?
+    ) async throws -> CardCacheSnapshot {
         let url = URL(string: "https://api.hearthstonejson.com/v1/\(build)/\(locale)/cards.json")!
-        let (data, response) = try await session.data(from: url)
+        let (bytes, response) = try await session.bytes(from: url)
         guard (response as? HTTPURLResponse).map({ 200..<300 ~= $0.statusCode }) == true else {
             throw URLError(.badServerResponse)
         }
+        let totalBytes = response.expectedContentLength > 0 ? response.expectedContentLength : nil
+        var data = Data()
+        if let totalBytes {
+            data.reserveCapacity(Int(min(totalBytes, Int64(Int.max))))
+        }
+        var downloadedBytes: Int64 = 0
+        var lastProgressEmit = Date.distantPast
+        for try await byte in bytes {
+            data.append(byte)
+            downloadedBytes += 1
+            let now = Date()
+            if now.timeIntervalSince(lastProgressEmit) >= 0.12 || downloadedBytes == totalBytes {
+                lastProgressEmit = now
+                await progress?(CardLoadProgress(stage: .downloading, downloadedBytes: downloadedBytes, totalBytes: totalBytes))
+            }
+        }
+        await progress?(CardLoadProgress(stage: .preparing, downloadedBytes: downloadedBytes, totalBytes: totalBytes))
         let rows = try decoder.decode([HsJsonCardDTO].self, from: data)
         let cards = rows.compactMap { $0.toDomain(locale: locale) }
         let now = Date()
@@ -137,6 +162,17 @@ struct CardCacheInfo: Codable, Equatable {
     let build: String?
     let fetchedAt: Date?
     let lastCheckedAt: Date?
+}
+
+struct CardLoadProgress: Equatable, Sendable {
+    enum Stage: Sendable {
+        case downloading
+        case preparing
+    }
+
+    let stage: Stage
+    let downloadedBytes: Int64
+    let totalBytes: Int64?
 }
 
 private struct CardCachePayload: Codable {

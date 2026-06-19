@@ -40,6 +40,7 @@
 "Deck name" = "Имя колоды";
 "Decode" = "Декодировать";
 "Delete" = "Удалить";
+"Delete deck?" = "Удалить колоду?";
 "Demon H." = "ОнД";
 "Demon Hunter" = "Охотник на демонов";
 "Details" = "Детали";
@@ -60,6 +61,9 @@
 "Legendary limit (x1)" = "Лимит легендарок (x1)";
 "Library" = "Карты";
 "Loading cards..." = "Загружаем карты...";
+"Preparing downloaded cards..." = "Подготавливаем загруженные карты...";
+"loading.cards.downloading" = "Загружаем данные карт: %@ загружено";
+"loading.cards.downloading.known" = "Загружаем данные карт: %@ / %@ (осталось %@)";
 "Locale" = "Локаль";
 "Last update check" = "Последняя проверка";
 "Mage" = "Маг";
@@ -77,6 +81,7 @@
 "Paladin" = "Паладин";
 "Paste a Hearthstone deck code. Tap Decode to view and save it." = "Вставь код колоды Hearthstone. Нажми Декодировать, чтобы увидеть и сохранить.";
 "Paste deck code" = "Вставить код";
+"Paste deck code here" = "Вставь код колоды сюда";
 "Pick a class to begin." = "Выбери класс, чтобы начать.";
 "Pool" = "Пул";
 "Priest" = "Жрец";
@@ -121,6 +126,7 @@
 "builder.incomplete.save.message" = "В колоде только %d/%d карт. Все равно сохранить?";
 "builder.wrongClass" = "Это карта другого класса (нужен %@ или нейтрал)";
 "deck.warning.incomplete" = "В колоде только %d/%d карт.";
+"delete.deck.message" = "Удалить \"%@\"?";
 "default.classDeckName" = "Колода: %@";
 "library.count.format" = "карт: %d";
 "Rotation data failed to load." = "Не удалось загрузить данные ротации.";
